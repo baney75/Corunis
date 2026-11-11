@@ -31,6 +31,20 @@ Corunis will learn from open work on organizational AI and cite it here as we us
 
 The first version is sign-in with roles and a role-aware assistant that answers from the school's own documents with citations, and it works on a phone as an installable PWA (the same app), built while we find a pilot school. Then come an audit log, memory, Canvas and Moodle connectors, grants and student support workspaces, and backup. The pilot school picks what matters most after that. The first Dev release is planned for Feb 1, 2027.
 
+### One bot, one chat
+
+This is a hard rule. Corunis is one bot with one chatting interface for everyone, in the same spirit as Grok Bot or the Nous Hermes agent. It is not a suite of dashboards, and it is not a different app per role. After sign-in, everyone is in the same chat, on the web and as the installable PWA (the same app). Role-aware briefings, cards and quick actions appear inline in the chat.
+
+The only supporting surfaces are:
+
+- sign-in
+- the chat itself
+- side panels inside the chat: sources and citations, memory ("what Corunis knows about me"), files, and routines and reminders
+- notifications
+- an admin console for IT
+
+After the first version come Blackboard and other SIS connectors, the school's own sign-in, agent-made themes, and whatever the pilot school asks for next.
+
 The parts and licenses are in [docs/STACK.md](docs/STACK.md).
 
 ## Setup
