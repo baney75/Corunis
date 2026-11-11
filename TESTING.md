@@ -16,7 +16,7 @@ Every task has golden cases built from realistic university data (synthetic, nev
 - **Known limits are declared.** Anything UniCerebrum doesn't support yet is listed in `SUPPORTED.md`. The app detects those situations and tells the user plainly instead of guessing.
 - **Every model is tested separately.** A model is only offered for a task after it passes that task's suite (see `BENCHMARKS.md`).
 - **Real behavior, not mocks.** Tests run the real skills against real local models and check real outputs.
-- **Regressions block release.** A drop in any pass rate blocks promotion from Nightly to Stable.
+- **Regressions block release.** A drop in any pass rate blocks promotion from Dev to Stable.
 
 ## Layout
 
