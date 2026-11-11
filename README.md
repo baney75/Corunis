@@ -2,9 +2,12 @@
 
 UniCerebrum is an open-source organizational brain for universities. It is completely local, private, safe and secure: the AI runs on the university's own hardware, and its data never leaves campus.
 
-## What it does
+## What it will do (planned)
 
-UniCerebrum helps a university with real, day-to-day work, in a realistic way:
+Nothing below is built yet. See [SUPPORTED.md](SUPPORTED.md) for what works today.
+
+
+UniCerebrum will help a university with day-to-day work:
 
 - **Grants:** finding opportunities, organizing requirements and deadlines, and drafting materials from the institution's own records.
 - **Students:** helping staff manage student records, advising and communication.
@@ -20,7 +23,11 @@ UniCerebrum helps a university with real, day-to-day work, in a realistic way:
 
 ## Prior work
 
-Universities are already building organizational brains, and UniCerebrum learns from them and from open work on organizational AI. What sets it apart is that it is fully local.
+UniCerebrum will learn from open work on organizational AI and cite it here as we use it. What sets it apart is that it is fully local.
+
+## First step
+
+No code until a pilot school names the one task it wants help with first. The likely first feature is cited answers from the school's own documents.
 
 ## Setup
 

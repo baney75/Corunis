@@ -4,7 +4,7 @@ Instructions for AI coding agents (Claude Code, Codex, Cursor and others) workin
 
 ## What this project is
 
-A fully local, private and secure organizational brain for universities. It helps with grants, student management and institutional knowledge in a realistic way, and it is easy to extend, back up and integrate with existing campus systems.
+A fully local, private and secure organizational brain for universities. It helps with grants, student management and institutional knowledge, and it is easy to extend, back up and integrate with existing campus systems.
 
 ## Ground rules
 
@@ -34,7 +34,7 @@ Ask before installing anything or spending money, never print keys, and never tr
 
 ## Skills
 
-Skills live in `skills/maintainer/` (for building this project) and `skills/runtime/` (used by agents inside the app). All are original and tested; see `skills/README.md`. Load the skill that matches your task before starting, and improve it when you learn something.
+Skills live in `skills/maintainer/` (for building this project) and `skills/runtime/` (used by agents inside the app). None exist yet. Each one must be original and tested before it merges; see `skills/README.md`. Load the skill that matches your task before starting, and improve it when you learn something.
 
 ## Testing and honesty
 
