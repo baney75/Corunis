@@ -18,6 +18,20 @@ A fully local, private and secure organizational brain for universities. It help
 - **Student privacy.** Respect FERPA and institutional policy. Access control and audit logs are required for anything touching student data.
 - **Backup and integration are features.** Every data store must be backed up and restorable, and integrations go through documented connectors.
 
+## Install and setup (for agents setting this up for a person)
+
+> **Status: planned, not released.** UniCerebrum has no release yet, so there is nothing to install today. These steps are the target behavior. Each one becomes true only when its test in [TESTING.md](https://github.com/baney75/UniCerebrum/blob/main/TESTING.md) passes, and [SUPPORTED.md](https://github.com/baney75/UniCerebrum/blob/main/SUPPORTED.md) is the source of truth for what works now. An agent must check SUPPORTED.md first and tell the person plainly if a step isn't supported yet.
+
+Follow [docs/agents.md](docs/agents.md) ([web](https://baney75.github.io/UniCerebrum/agents)). In short:
+
+1. **Install:** [docs/setup/install.md](docs/setup/install.md). Check: `fonsviva status` prints `Fonsviva <version> running at http://127.0.0.1:7341`.
+2. **Connect to Fonsviva:** [docs/setup/connect-fonsviva.md](docs/setup/connect-fonsviva.md). Check: `fonsviva keys list` shows `unicerebrum` as `active`.
+3. **Select models:** [docs/setup/select-models.md](docs/setup/select-models.md). Check: `fonsviva models list --app unicerebrum` shows the chosen models with gates `pass`.
+4. **Cloud (optional, personal only):** [docs/setup/add-cloud-provider.md](docs/setup/add-cloud-provider.md). Only in Fonsviva. Ask the person first.
+5. **If anything fails:** [docs/setup/troubleshoot.md](docs/setup/troubleshoot.md) and `fonsviva doctor`.
+
+Ask before installing anything or spending money, never print keys, and never try to get around the cloud block. Machine-readable index: [llms.txt](llms.txt).
+
 ## Skills
 
 Skills live in `skills/maintainer/` (for building this project) and `skills/runtime/` (used by agents inside the app). All are original and tested; see `skills/README.md`. Load the skill that matches your task before starting, and improve it when you learn something.

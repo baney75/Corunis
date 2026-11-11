@@ -22,6 +22,12 @@ UniCerebrum helps a university with real, day-to-day work, in a realistic way:
 
 Universities are already building organizational brains, and UniCerebrum learns from them and from open work on organizational AI. What sets it apart is that it is fully local.
 
+## Setup
+
+UniCerebrum runs on [Fonsviva](https://github.com/baney75/Fonsviva), the shared local compute layer. If Fonsviva is already installed, UniCerebrum uses it and you pick models inside the app. If not, the app installs it for you and walks you through setup. Cloud providers are set up only in Fonsviva, for personal use only.
+
+Agents setting this up for someone: start at [docs/agents.md](docs/agents.md) or [llms.txt](llms.txt). Site: https://baney75.github.io/UniCerebrum/
+
 ## Status
 
 Early planning. The name may change. Contributions and ideas are welcome.
