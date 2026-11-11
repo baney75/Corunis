@@ -25,9 +25,11 @@ UniCerebrum will help a university with day-to-day work:
 
 UniCerebrum will learn from open work on organizational AI and cite it here as we use it. What sets it apart is that it is fully local.
 
-## First step
+## First version (planned)
 
-No code until a pilot school names the one task it wants help with first. The likely first feature is cited answers from the school's own documents.
+The first version is sign-in with roles and a role-aware assistant that answers from the school's own documents with citations, built while we find a pilot school. Then come an audit log, memory, Canvas and Moodle connectors, grants and student support workspaces, and backup. The pilot school picks what matters most after that. The first Dev release is planned for late August 2027.
+
+The parts and licenses are in [docs/STACK.md](docs/STACK.md).
 
 ## Setup
 
