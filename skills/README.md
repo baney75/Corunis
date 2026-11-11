@@ -1,15 +1,15 @@
 # Skills
 
-Skills are the instructions that make the models in UniCerebrum do their work right. They must be standardized, precise and tested. A weak or vague skill is a bug.
+Skills are the instructions that make the models in Corunis do their work right. They must be standardized, precise and tested. A weak or vague skill is a bug.
 
 ## Two sets
 
-- `skills/maintainer/`: skills for agents that build and maintain UniCerebrum itself (writing features, fixing bugs, running releases, updating benchmarks).
-- `skills/runtime/`: skills the agents inside UniCerebrum use while helping a user.
+- `skills/maintainer/`: skills for agents that build and maintain Corunis itself (writing features, fixing bugs, running releases, updating benchmarks).
+- `skills/runtime/`: skills the agents inside Corunis use while helping a user.
 
 ## Originality
 
-Every skill here is original work written for UniCerebrum. We study strong skills we already have or find, learn what makes them good, and then write our own. We don't copy them in. Credit sources that taught us something in the skill's Sources section.
+Every skill here is original work written for Corunis. We study strong skills we already have or find, learn what makes them good, and then write our own. We don't copy them in. Credit sources that taught us something in the skill's Sources section.
 
 ## The standard
 

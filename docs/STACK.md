@@ -1,8 +1,8 @@
 # Open-source stack (planned)
 
-Nothing here is built yet. This is the list of existing projects UniCerebrum v0 plans to assemble, in build order, with each license and how UniCerebrum uses it. UniCerebrum's own code stays MIT.
+Nothing here is built yet. This is the list of existing projects Corunis v0 plans to assemble, in build order, with each license and how Corunis uses it. Corunis's own code stays MIT.
 
-| Build | Part | License | How UniCerebrum uses it |
+| Build | Part | License | How Corunis uses it |
 |---|---|---|---|
 | 1 | [t3code](https://github.com/pingdotgg/t3code) | MIT | Forked for the app, threads and provider layer, the same way as Gantrel. |
 | 1, 9 | [Keycloak](https://github.com/keycloak/keycloak) | Apache-2.0 | Sign-in (OpenID Connect), roles, the admin console, and later the link to the school's own sign-in (SAML or OIDC). |
@@ -22,10 +22,10 @@ Nothing here is built yet. This is the list of existing projects UniCerebrum v0 
 
 ## Rules
 
-- All AI runs locally through [Fonsviva](https://github.com/baney75/Fonsviva). UniCerebrum's Fonsviva key can never reach a cloud provider.
-- UniCerebrum links only to MIT, Apache, BSD, PostgreSQL and LGPL code. GPL and AGPL systems such as Canvas and Moodle are reached only through their APIs.
+- All AI runs locally through [Fonsviva](https://github.com/baney75/Fonsviva). Corunis's Fonsviva key can never reach a cloud provider.
+- Corunis links only to MIT, Apache, BSD, PostgreSQL and LGPL code. GPL and AGPL systems such as Canvas and Moodle are reached only through their APIs.
 - Student records follow FERPA: only assigned staff see a student, and every view is logged.
 
 ## After v0
 
-These come after the first Dev release (planned for late August 2027): Blackboard and other SIS connectors, the school's own sign-in, a phone layout, agent-made themes, and whatever the pilot school asks for next.
+These come after the first Dev release (planned for Feb 1, 2027): Blackboard and other SIS connectors, the school's own sign-in, agent-made themes, and whatever the pilot school asks for next.

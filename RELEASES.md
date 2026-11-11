@@ -1,6 +1,6 @@
 # Releases: Stable and Dev
 
-UniCerebrum must be stable, so it ships on two update channels only. There is no nightly channel.
+Corunis must be stable, so it ships on two update channels only. There is no nightly channel.
 
 ## Channels
 

@@ -1,4 +1,4 @@
-# Contributing to UniCerebrum
+# Contributing to Corunis
 
 ## Coauthorship
 
@@ -11,7 +11,7 @@ Co-authored-by: Gil Rodrigues <work@gildrb.com>
 
 ## Design work
 
-1. Take a card on the Notion board for UniCerebrum, assign yourself and move it to In progress.
+1. Take a card on the Notion board for Corunis, assign yourself and move it to In progress.
 2. Design it in Penpot or Figma, following `DESIGN.md`.
 3. Export the screens to `design/exports/` and open a pull request. Link the PR and the design file on the card.
 4. Update `DESIGN.md` when you set a new rule, component or pattern, so agents building the UI follow it.
@@ -21,5 +21,5 @@ Co-authored-by: Gil Rodrigues <work@gildrb.com>
 
 - Read `AGENTS.md` first. It applies to people as well as agents.
 - New or changed skills follow `skills/README.md` and need tests.
-- Any claim about what UniCerebrum can do needs a passing test (see `TESTING.md`).
+- Any claim about what Corunis can do needs a passing test (see `TESTING.md`).
 - Work on a branch, open a pull request into `main`, and keep CI green. See `RELEASES.md` for how changes reach Dev and Stable.

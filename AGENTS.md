@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for AI coding agents (Claude Code, Codex, Cursor and others) working in UniCerebrum.
+Instructions for AI coding agents (Claude Code, Codex, Cursor and others) working in Corunis.
 
 ## What this project is
 
@@ -20,13 +20,13 @@ A fully local, private and secure organizational brain for universities. It help
 
 ## Install and setup (for agents setting this up for a person)
 
-> **Status: planned, not released.** UniCerebrum has no release yet, so there is nothing to install today. These steps are the target behavior. Each one becomes true only when its test in [TESTING.md](https://github.com/baney75/UniCerebrum/blob/main/TESTING.md) passes, and [SUPPORTED.md](https://github.com/baney75/UniCerebrum/blob/main/SUPPORTED.md) is the source of truth for what works now. An agent must check SUPPORTED.md first and tell the person plainly if a step isn't supported yet.
+> **Status: planned, not released.** Corunis has no release yet, so there is nothing to install today. These steps are the target behavior. Each one becomes true only when its test in [TESTING.md](https://github.com/baney75/Corunis/blob/main/TESTING.md) passes, and [SUPPORTED.md](https://github.com/baney75/Corunis/blob/main/SUPPORTED.md) is the source of truth for what works now. An agent must check SUPPORTED.md first and tell the person plainly if a step isn't supported yet.
 
-Follow [docs/agents.md](docs/agents.md) ([web](https://baney75.github.io/UniCerebrum/agents)). In short:
+Follow [docs/agents.md](docs/agents.md) ([web](https://baney75.github.io/Corunis/agents)). In short:
 
 1. **Install:** [docs/setup/install.md](docs/setup/install.md). Check: `fonsviva status` prints `Fonsviva <version> running at http://127.0.0.1:7341`.
-2. **Connect to Fonsviva:** [docs/setup/connect-fonsviva.md](docs/setup/connect-fonsviva.md). Check: `fonsviva keys list` shows `unicerebrum` as `active`.
-3. **Select models:** [docs/setup/select-models.md](docs/setup/select-models.md). Check: `fonsviva models list --app unicerebrum` shows the chosen models with gates `pass`.
+2. **Connect to Fonsviva:** [docs/setup/connect-fonsviva.md](docs/setup/connect-fonsviva.md). Check: `fonsviva keys list` shows `corunis` as `active`.
+3. **Select models:** [docs/setup/select-models.md](docs/setup/select-models.md). Check: `fonsviva models list --app corunis` shows the chosen models with gates `pass`.
 4. **Cloud (optional, personal only):** [docs/setup/add-cloud-provider.md](docs/setup/add-cloud-provider.md). Only in Fonsviva. Ask the person first.
 5. **If anything fails:** [docs/setup/troubleshoot.md](docs/setup/troubleshoot.md) and `fonsviva doctor`.
 
@@ -42,7 +42,7 @@ Never claim the software can do something without a passing test. Follow `TESTIN
 
 ## Releases
 
-UniCerebrum ships on two channels, Stable and Dev (no nightly). See `RELEASES.md`. Never push directly to `stable`.
+Corunis ships on two channels, Stable and Dev (no nightly). See `RELEASES.md`. Never push directly to `stable`.
 
 ## Repository layout
 

@@ -1,14 +1,14 @@
 # Benchmarking local models
 
-We need to know which local models can actually do UniCerebrum's work, on which hardware. Guessing is not allowed.
+We need to know which local models can actually do Corunis's work, on which hardware. Guessing is not allowed.
 
 ## Built on the Local AI registry
 
 Model launches come from Sybil Solutions' [Local AI registry](https://github.com/sybil-solutions/local-ai-registry) ([local.sybilsolutions.ai](https://local.sybilsolutions.ai)). Each registry recipe is a validated way to run a model on a specific GPU that passed its general gates: it loads, chats, reasons, calls tools, holds context and decodes at 15 tok/s or more. This works on any device the registry covers.
 
-UniCerebrum adds its own task gates on top. A model only counts as working for UniCerebrum when it passes them.
+Corunis adds its own task gates on top. A model only counts as working for Corunis when it passes them.
 
-## UniCerebrum task gates
+## Corunis task gates
 
 - **Grounded answers:** correct and cited from institutional documents.
 - **Grant handling:** requirements, eligibility and deadlines extracted correctly.

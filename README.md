@@ -1,13 +1,15 @@
-# UniCerebrum
+# Corunis
 
-UniCerebrum is an open-source organizational brain for universities. It is completely local, private, safe and secure: the AI runs on the university's own hardware, and its data never leaves campus.
+Formerly UniCerebrum. The name is Latin *cor* + *unus*, "of one heart" (Acts 4:32).
+
+Corunis is an open-source organizational brain for universities. It is completely local, private, safe and secure: the AI runs on the university's own hardware, and its data never leaves campus.
 
 ## What it will do (planned)
 
 Nothing below is built yet. See [SUPPORTED.md](SUPPORTED.md) for what works today.
 
 
-UniCerebrum will help a university with day-to-day work:
+Corunis will help a university with day-to-day work:
 
 - **Grants:** finding opportunities, organizing requirements and deadlines, and drafting materials from the institution's own records.
 - **Students:** helping staff manage student records, advising and communication.
@@ -23,23 +25,23 @@ UniCerebrum will help a university with day-to-day work:
 
 ## Prior work
 
-UniCerebrum will learn from open work on organizational AI and cite it here as we use it. What sets it apart is that it is fully local.
+Corunis will learn from open work on organizational AI and cite it here as we use it. What sets it apart is that it is fully local.
 
 ## First version (planned)
 
-The first version is sign-in with roles and a role-aware assistant that answers from the school's own documents with citations, built while we find a pilot school. Then come an audit log, memory, Canvas and Moodle connectors, grants and student support workspaces, and backup. The pilot school picks what matters most after that. The first Dev release is planned for late August 2027.
+The first version is sign-in with roles and a role-aware assistant that answers from the school's own documents with citations, and it works on a phone as an installable PWA (the same app), built while we find a pilot school. Then come an audit log, memory, Canvas and Moodle connectors, grants and student support workspaces, and backup. The pilot school picks what matters most after that. The first Dev release is planned for Feb 1, 2027.
 
 The parts and licenses are in [docs/STACK.md](docs/STACK.md).
 
 ## Setup
 
-UniCerebrum runs on [Fonsviva](https://github.com/baney75/Fonsviva), the shared local compute layer. If Fonsviva is already installed, UniCerebrum uses it and you pick models inside the app. If not, the app installs it for you and walks you through setup. Cloud providers are set up only in Fonsviva, for personal use only.
+Corunis runs on [Fonsviva](https://github.com/baney75/Fonsviva), the shared local compute layer. If Fonsviva is already installed, Corunis uses it and you pick models inside the app. If not, the app installs it for you and walks you through setup. Cloud providers are set up only in Fonsviva, for personal use only.
 
-Agents setting this up for someone: start at [docs/agents.md](docs/agents.md) or [llms.txt](llms.txt). Site: https://baney75.github.io/UniCerebrum/
+Agents setting this up for someone: start at [docs/agents.md](docs/agents.md) or [llms.txt](llms.txt). Site: https://baney75.github.io/Corunis/
 
 ## Status
 
-Early planning. The name may change. Contributions and ideas are welcome.
+Early planning. Contributions and ideas are welcome.
 
 ## License
 

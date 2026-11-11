@@ -1,6 +1,6 @@
 # Testing: honest claims only
 
-UniCerebrum must never claim it can do something it can't. Every claim in the README, the docs or the app has a test behind it, and the results are public in this repo.
+Corunis must never claim it can do something it can't. Every claim in the README, the docs or the app has a test behind it, and the results are public in this repo.
 
 ## Answer accuracy standard
 
@@ -13,7 +13,7 @@ Every task has golden cases built from realistic university data (synthetic, nev
 ## Rules
 
 - **No unknown error.** Any output that differs from the expected result fails the test, field by field. "Close enough" is a failure.
-- **Known limits are declared.** Anything UniCerebrum doesn't support yet is listed in `SUPPORTED.md`. The app detects those situations and tells the user plainly instead of guessing.
+- **Known limits are declared.** Anything Corunis doesn't support yet is listed in `SUPPORTED.md`. The app detects those situations and tells the user plainly instead of guessing.
 - **Every model is tested separately.** A model is only offered for a task after it passes that task's suite (see `BENCHMARKS.md`).
 - **Real behavior, not mocks.** Tests run the real skills against real local models and check real outputs.
 - **Regressions block release.** A drop in any pass rate blocks promotion from Dev to Stable.
