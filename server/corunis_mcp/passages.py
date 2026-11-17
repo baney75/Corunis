@@ -69,16 +69,18 @@ def paragraphs(text: str, start: int, end: int) -> list[tuple[int, int, int]]:
 
 
 def long_pieces(text: str, start: int, end: int) -> list[tuple[int, int]]:
-    """Cut one long paragraph into pieces of about LONG_PIECE words, at a sentence end when one is near."""
+    """Cut one long paragraph into even pieces of at most LONG_PIECE words, at a sentence end when one is near."""
     words = [(m.start() + start, m.end() + start, m.group()) for m in WORD.finditer(text[start:end])]
+    count = -(-len(words) // LONG_PIECE)
+    target = -(-len(words) // count)
     pieces = []
     i = 0
     while i < len(words):
-        stop = min(i + LONG_PIECE, len(words))
+        stop = min(i + target, len(words))
         if len(words) - stop < MIN_WORDS // 3:
             stop = len(words)
         else:
-            for j in range(stop, max(i + MIN_WORDS, stop - 60), -1):
+            for j in range(stop, max(i + target // 2, stop - 40), -1):
                 if SENTENCE_END.search(words[j - 1][2]):
                     stop = j
                     break
@@ -99,10 +101,13 @@ def split(units: list[Unit], path: str, version: str) -> tuple[str, list[Passage
         words = 0
         for s, e, n in paragraphs(text, unit_start, unit_end):
             if n > MAX_WORDS:
-                if current:
+                pieces = long_pieces(text, s, e)
+                if current and words + len(WORD.findall(text[pieces[0][0]:pieces[0][1]])) <= MAX_WORDS:
+                    pieces[0] = (current[0], pieces[0][1])  # a short lead-in joins the first piece
+                elif current:
                     emit(*current, page)
-                    current, words = None, 0
-                for ps, pe in long_pieces(text, s, e):
+                current, words = None, 0
+                for ps, pe in pieces:
                     emit(ps, pe, page)
                 continue
             if current and words + n > MAX_WORDS:
