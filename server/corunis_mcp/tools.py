@@ -7,20 +7,21 @@ reply, same wording, no count and no hint. Search statistics come only from read
 
 from __future__ import annotations
 
+import json
 import os
 import re
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from corunis_mcp import answer as answerlib
 from corunis_mcp import brain as brainlib
 from corunis_mcp import extract
+from corunis_mcp.answer import MIN_QUOTE, NO_ANSWER, clean_quote, normalize, unsupported_facts
 from corunis_mcp.brain import Brain, BrainError
-from corunis_mcp.identity import Caller, caller, require_keeper
+from corunis_mcp.identity import Caller, calling_session, caller, require_keeper
 from corunis_mcp.index import Index
-from corunis_mcp.ingest import ingest
+from corunis_mcp.ingest import ingest, sync
 
-NO_ANSWER = "The documents I can see don't answer this."
 NOT_FOUND = "No passage with that id is available to you."
 
 # Ranking: BM25 picks CANDIDATES passages per search, which are then ordered by coverage (how
@@ -34,7 +35,6 @@ CANDIDATES = 30
 MAX_TERMS = 12
 DEFAULT_K = 5
 MAX_K = 20
-MIN_QUOTE = 4
 
 STOPWORDS = frozenset(
     """
@@ -51,7 +51,7 @@ STOPWORDS = frozenset(
 
 AS_ROLE = {
     "type": "string",
-    "description": "Keeper only: answer as this role would see it, to check what the role can read.",
+    "description": "Answer as this role would see it, to check what the role can read. It can only narrow what you see.",
 }
 
 TOOLS = [
@@ -81,32 +81,24 @@ TOOLS = [
     },
     {
         "name": "verify",
-        "description": "Check an answer before showing it. Each claim names a passage id and a short exact quote from"
-        " that passage. Returns the claims whose quote is in their passage (supported) and the ones that fail."
-        " Show only supported claims.",
+        "description": "Check your whole answer before showing it. Write every sentence with its citations in"
+        ' brackets: [p0123456789abcde "exact words from that passage"]. Cite several passages with several'
+        " brackets. Mark a value you computed with [derived 79,650] and cite its inputs. Returns the answer with"
+        " only the sentences that passed: each needs a citation whose quote is in its passage, and every number,"
+        " date and name in the sentence must be in its quotes. Show only what it returns.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "claims": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "text": {"type": "string", "description": "The claim in your own words."},
-                            "passage_id": {"type": "string"},
-                            "quote": {"type": "string", "description": "Words copied exactly from the passage."},
-                        },
-                        "required": ["passage_id", "quote"],
-                    },
-                },
+                "answer": {"type": "string", "description": "The whole answer, with citations in brackets."},
                 "as_role": AS_ROLE,
             },
-            "required": ["claims"],
+            "required": ["answer"],
         },
     },
     {
         "name": "remember",
-        "description": "Save a note to the brain with its author and date. Without a space, only the keeper can read it.",
+        "description": "Keeper only. Save a note with its author and date in a space's notes folder. Without a space,"
+        " it goes to the narrowest space (the keeper's own space in a new brain).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -119,13 +111,10 @@ TOOLS = [
     {
         "name": "ingest",
         "description": "Keeper only. Read new and changed files into the index. With no path, the whole brain."
-        " A path outside the brain is copied into the named space first.",
+        " Put files in a space folder first; a path outside the brain folder is refused.",
         "inputSchema": {
             "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "A file or folder, inside the brain or outside it."},
-                "space": {"type": "string", "description": "The space to copy an outside path into."},
-            },
+            "properties": {"path": {"type": "string", "description": "A file or folder inside the brain."}},
         },
     },
     {
@@ -206,27 +195,6 @@ def fts_term(term: str) -> str:
     return '"' + term.replace('"', '""') + '"'
 
 
-QUOTE_MAP = str.maketrans({
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",
-    "“": '"', "”": '"', "„": '"', "‟": '"',
-    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "−": "-",
-    " ": " ", "…": "...",
-})
-
-
-def normalize(text: str) -> str:
-    return " ".join(text.translate(QUOTE_MAP).casefold().split())
-
-
-def clean_quote(quote: str) -> str:
-    """Normalize a quote and drop wrapping quote marks or ellipses a model may add around it."""
-    text = normalize(quote)
-    previous = None
-    while text != previous:
-        previous = text
-        text = text.strip().strip("\"'").strip()
-        text = text.removeprefix("...").removesuffix("...").strip()
-    return text
 
 
 def default_home() -> Path:
@@ -241,6 +209,7 @@ class Session:
         self.home = (home or default_home()).expanduser()
         self.brain: Brain | None = None
         self.index: Index | None = None
+        self.member: str | None = None  # set per call from identity.calling_session
         start = brain_path or self._remembered()
         if start is not None:
             try:
@@ -262,7 +231,7 @@ class Session:
         return None
 
     def _open(self, root: Path) -> Brain:
-        root = root.expanduser().resolve()
+        root = Path(os.path.realpath(root.expanduser()))
         loaded = brainlib.load(root)
         if self.index is not None:
             self.index.close()
@@ -280,40 +249,89 @@ class Session:
             self.index.close()
             self.index = None
 
-    def need(self) -> tuple[Brain, Index]:
-        if self.brain is None or self.index is None:
-            raise BrainError("No brain is open. Make one with brain_new, or open one with brain_open.")
-        self.brain = brainlib.load(self.brain.root)  # pick up hand edits to brain.toml
-        return self.brain, self.index
-
-    def call(self, name: str, args: dict) -> dict:
+    def call(self, name: str, args: dict, meta: dict | None = None) -> dict:
+        """Run one tool. Identity is decided first, so a refused caller reaches no tool at all."""
         handler = getattr(self, "tool_" + name, None)
         if handler is None or name not in {tool["name"] for tool in TOOLS}:
             raise BrainError(f"Unknown tool: {name}")
-        return handler(**args)
+        self.member = calling_session(meta)
+        try:
+            return handler(**args)
+        finally:
+            self.member = None
+
+    def need(self) -> tuple[Brain, Index]:
+        if self.brain is None or self.index is None:
+            raise BrainError("No brain is open. Make one with brain_new, or open one with brain_open.")
+        self.brain = brainlib.load(self.brain.root)  # pick up edits to brain.toml before every call
+        return self.brain, self.index
+
+    def who(self, brain: Brain, as_role: str | None = None) -> Caller:
+        if self.member is None:
+            raise BrainError("Call tools through Session.call.")
+        return caller(brain, self.member, as_role)
+
+    def reading(self, as_role: str | None = None) -> tuple[Brain, Index, Caller]:
+        """For every read tool: catch up with moved, linked and changed files, then decide the view."""
+        brain, index = self.need()
+        sync(brain, index)
+        return brain, index, self.who(brain, as_role)
+
+    def admin(self) -> tuple[Brain, Index, Caller]:
+        brain, index = self.need()
+        who = self.who(brain)
+        require_keeper(who)
+        return brain, index, who
+
+    @staticmethod
+    def fresh(brain: Brain, document: str, mtime_ns: int, size: int, spaces: str, who: Caller) -> bool:
+        """Query-time check against the current brain.toml and folder: every path that reaches the file
+        is in a space the caller reads, and the file is still at its indexed real path, unchanged."""
+        if not set(json.loads(spaces)) <= who.spaces:
+            return False
+        parts = document.split("/")
+        if len(parts) < 3 or parts[0] != brainlib.SPACES:
+            return False
+        try:
+            stat = (brain.root / document).stat()
+        except OSError:
+            return False
+        return stat.st_mtime_ns == mtime_ns and stat.st_size == size
+
+    def readable(self, brain: Brain, index: Index, pid: str, who: Caller) -> dict | None:
+        """A passage the caller may read, or None: the same None for a restricted id and an unknown one."""
+        passage = index.passage(pid, set(who.spaces)) if pid else None
+        if passage is None:
+            return None
+        meta = (passage.pop("mtime_ns"), passage.pop("size"), passage.pop("spaces"))
+        passage.pop("space")
+        return passage if self.fresh(brain, passage["document"], *meta, who) else None
+
+    def readable_spaces(self, who: Caller) -> list[str]:
+        return sorted(s for s in who.spaces if s != brainlib.LINKED)
 
     # Reading
 
     def tool_search(self, question: str, k: int = DEFAULT_K, include_weak: bool = False, as_role: str | None = None) -> dict:
-        brain, index = self.need()
-        who = caller(brain, as_role)
+        brain, index, who = self.reading(as_role)
         k = max(1, min(int(k), MAX_K))
         terms = terms_of(question)
         counts = index.counts(set(who.spaces))
         searched = {
-            "spaces": sorted(s for s in who.spaces if s != brainlib.KEEPER_NOTES) + (["keeper notes"] if who.keeper else []),
+            "spaces": self.readable_spaces(who),
             "documents": sum(c["documents"] for c in counts.values()),
             "terms": terms,
         }
         phrases = [fts_term(t) for t in terms]
         hits = index.search(" OR ".join(phrases), set(who.spaces), max(k, CANDIDATES)) if terms else []
+        hits = [h for h in hits if self.fresh(brain, h.document, h.mtime_ns, h.size, h.spaces, who)]
         covered: dict[int, int] = {}
         for space in {h.space for h in hits}:
             covered.update(index.coverage(space, [h.rowid for h in hits if h.space == space], phrases))
         hits.sort(key=lambda h: (-covered[h.rowid], -h.score, h.id))
         hits = hits[:k]
         answerable = bool(hits) and covered[hits[0].rowid] / len(terms) >= COVERAGE_MIN
-        result: dict = {"answerable": answerable}
+        result: dict = {"answerable": answerable, "passages": []}
         if answerable or include_weak:
             result["passages"] = [
                 {
@@ -323,138 +341,133 @@ class Session:
                 }
                 for h in hits
             ]
-        else:
-            result["passages"] = []
         if not answerable:
             result["say"] = NO_ANSWER
         result["searched"] = searched
         return result
 
     def tool_open(self, passage_id: str, as_role: str | None = None) -> dict:
-        brain, index = self.need()
-        who = caller(brain, as_role)
-        passage = index.passage(str(passage_id).strip(), set(who.spaces))
+        brain, index, who = self.reading(as_role)
+        passage = self.readable(brain, index, str(passage_id).strip(), who)
         if passage is None:
             return {"found": False, "message": NOT_FOUND}
-        passage.pop("space")
         return {"found": True, "passage": passage}
 
-    def tool_verify(self, claims: list, as_role: str | None = None) -> dict:
-        brain, index = self.need()
-        who = caller(brain, as_role)
-        supported, failed = [], []
-        for claim in claims if isinstance(claims, list) else []:
-            claim = claim if isinstance(claim, dict) else {}
-            pid = str(claim.get("passage_id", "")).strip()
-            quote = clean_quote(str(claim.get("quote", "")))
-            echo = {key: claim[key] for key in ("text", "passage_id", "quote") if key in claim}
-            passage = index.passage(pid, set(who.spaces)) if pid else None
-            if passage is None:
-                failed.append({**echo, "reason": NOT_FOUND})
-            elif len(quote) < MIN_QUOTE:
-                failed.append({**echo, "reason": f"The quote is shorter than {MIN_QUOTE} characters."})
-            elif quote in normalize(passage["text"]):
-                supported.append({**echo, "document": passage["document"], "page": passage["page"], "date": passage["date"]})
+    def tool_verify(self, answer: str, as_role: str | None = None) -> dict:
+        brain, index, who = self.reading(as_role)
+        kept, dropped = [], []
+        cited = 0
+        for sentence in answerlib.sentences(str(answer)):
+            if answerlib.is_abstention(sentence):
+                kept.append({"sentence": sentence.raw, "abstention": True})
+                continue
+            reason, sources = self.check_sentence(brain, index, who, sentence)
+            if reason:
+                dropped.append({"sentence": sentence.raw, "reason": reason})
             else:
-                failed.append({**echo, "reason": "The quote is not in that passage. Drop this claim."})
-        result: dict = {"supported": supported, "failed": failed}
-        if not supported:
+                kept.append({"sentence": sentence.raw, "citations": sources})
+                cited += 1
+        result: dict = {
+            "answer": " ".join(k["sentence"] for k in kept) if cited else NO_ANSWER,
+            "kept": kept if cited else [],
+            "dropped": dropped,
+        }
+        if not cited:
             result["say"] = NO_ANSWER
         return result
+
+    def check_sentence(self, brain: Brain, index: Index, who: Caller, sentence: answerlib.Sentence) -> tuple[str | None, list]:
+        if not sentence.citations:
+            if sentence.bad_brackets:
+                return 'Its citation is not in the form [p0123456789abcde "exact words"].', []
+            return "It cites no passage.", []
+        sources, quotes = [], []
+        for pid, raw_quote in sentence.citations:
+            passage = self.readable(brain, index, pid, who)
+            quote = clean_quote(raw_quote)
+            if passage is None:
+                return NOT_FOUND, []
+            if len(quote) < MIN_QUOTE:
+                return f"A quote is shorter than {MIN_QUOTE} characters.", []
+            if quote not in normalize(passage["text"]):
+                return f"The quote {raw_quote!r} is not in passage {pid}.", []
+            quotes.append(raw_quote)
+            sources.append({"passage_id": pid, "quote": raw_quote, "document": passage["document"],
+                            "page": passage["page"], "date": passage["date"]})
+        missing = unsupported_facts(sentence.text, quotes, sentence.derived)
+        if missing:
+            return f"It states {', '.join(missing)}, which none of its quotes contain.", []
+        return None, sources
 
     def tool_status(self, as_role: str | None = None) -> dict:
         if self.brain is None:
             return {"brain": None, "home": str(self.home), "next": "Make a brain with brain_new.", "pdf": extract.pdf_available()}
-        brain, index = self.need()
-        who = caller(brain, as_role)
-        counts = index.counts(set(who.spaces) - {brainlib.KEEPER_NOTES})
+        brain, index, who = self.reading(as_role)
+        readable = set(self.readable_spaces(who))
         result: dict = {
             "brain": brain.name,
-            "caller": {"member": who.member, "keeper": who.keeper, "roles": list(who.roles), "as_role": who.as_role},
-            "spaces": counts,
+            "caller": {"member": who.member, "keeper": who.keeper, "as_role": who.as_role},
+            "spaces": index.counts(readable),
             "pdf": extract.pdf_available(),
         }
         if who.keeper:
-            notes = index.counts({brainlib.KEEPER_NOTES})[brainlib.KEEPER_NOTES]
             result.update({
                 "path": str(brain.root),
-                "keeper_notes": notes,
                 "roles": {role: sorted(spaces) for role, spaces in sorted(brain.roles.items())},
                 "members": {m.id: {"name": m.name, "roles": m.roles} for m in sorted(brain.members.values(), key=lambda m: m.id)},
-                "unread_files": [{"file": path, "reason": error} for path, error in index.failures()],
-                "unread_spaces": sorted(s for s in brain.spaces() if not any(s in v for v in brain.roles.values())),
+                "linked_keeper_only": index.counts({brainlib.LINKED})[brainlib.LINKED],
+                "unread_files": [{"file": path, "reason": error} for path, error in index.failures(set(who.spaces))],
+                "unread_spaces": sorted(s for s in brain.spaces() if not brain.readers(s)),
             })
         return result
 
-    # Writing
+    # Writing: keeper only
 
     def tool_remember(self, note: str, space: str | None = None) -> dict:
-        brain, index = self.need()
-        who = caller(brain)
+        brain, index, who = self.admin()
         text = str(note).strip()
         if not text:
             raise BrainError("The note is empty.")
-        if space:
-            if space not in who.spaces or not brainlib.valid_space(space):
-                raise BrainError(f"You cannot save a note to {space!r}. Spaces you can use: {', '.join(sorted(s for s in who.spaces if s != brainlib.KEEPER_NOTES))}.")
-        elif not who.keeper:
-            raise BrainError("Name the space the note belongs to.")
+        readable = set(self.readable_spaces(who))
+        if space is None or not str(space).strip():
+            space = brain.narrowest(readable)
+        elif space not in readable or not brainlib.valid_space(space):
+            raise BrainError(f"You cannot save a note to {space!r}. Spaces you can use: {', '.join(sorted(readable))}.")
         now = datetime.now(timezone.utc).replace(microsecond=0)
+        stamp = now.isoformat().replace("+00:00", "Z")
         slug = "-".join(re.findall(r"[a-z0-9]+", text.casefold())[:6]) or "note"
-        brain.notes_dir.mkdir(exist_ok=True)
-        path = brain.notes_dir / f"{now:%Y-%m-%d-%H%M%S}-{slug}.md"
+        folder = brain.spaces_dir / space / brainlib.NOTES
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{now:%Y-%m-%d-%H%M%S}-{slug}.md"
         n = 2
         while path.exists():
-            path = brain.notes_dir / f"{now:%Y-%m-%d-%H%M%S}-{slug}-{n}.md"
+            path = folder / f"{now:%Y-%m-%d-%H%M%S}-{slug}-{n}.md"
             n += 1
-        lines = ["---", f"author: {who.member}", f"date: {now.isoformat().replace('+00:00', 'Z')}"]
-        if space:
-            lines.append(f"space: {space}")
-        path.write_text("\n".join(lines + ["---", "", text, ""]), encoding="utf-8")
+        path.write_text(f"---\nauthor: {who.member}\ndate: {stamp}\n---\n\n{text}\n", encoding="utf-8")
         rel = path.relative_to(brain.root).as_posix()
         ingest(brain, index, rel)
-        return {"saved": rel, "author": who.member, "date": lines[2][6:], "space": space or "keeper notes"}
+        return {"saved": rel, "author": who.member, "date": stamp, "space": space}
 
-    def tool_ingest(self, path: str | None = None, space: str | None = None) -> dict:
-        brain, index = self.need()
-        require_keeper(caller(brain))
+    def tool_ingest(self, path: str | None = None) -> dict:
+        brain, index, _ = self.admin()
+        root = Path(os.path.realpath(brain.root))
         scope = ""
-        copied = None
         if path:
             target = Path(path).expanduser()
-            if not target.is_absolute():
-                target = brain.root / target
-            target = target.resolve()
-            root = brain.root.resolve()
+            target = Path(os.path.realpath(target if target.is_absolute() else root / target))
+            if target != root and root not in target.parents:
+                raise BrainError("That path is outside the brain folder. Put the files in one of its spaces first.")
             if not target.exists():
-                raise BrainError(f"Nothing at {target}.")
-            if target == root or root in target.parents:
-                scope = target.relative_to(root).as_posix()
-            else:
-                if not space or not brainlib.valid_space(space):
-                    raise BrainError("That path is outside the brain. Name the space to copy it into.")
-                destination = brain.spaces_dir / space / target.name
-                if destination.exists():
-                    raise BrainError(f"{destination.relative_to(root).as_posix()} already exists. Rename or remove it first.")
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                if target.is_dir():
-                    shutil.copytree(target, destination)
-                else:
-                    shutil.copy2(target, destination)
-                scope = destination.relative_to(root).as_posix()
-                copied = scope
+                raise BrainError("Nothing is at that path in the brain.")
+            scope = "" if target == root else target.relative_to(root).as_posix()
         report = ingest(brain, index, scope).as_dict()
-        if copied:
-            report["copied_to"] = copied
-        unread = sorted(s for s in brain.spaces() if not any(s in v for v in brain.roles.values()))
+        unread = sorted(s for s in brain.spaces() if not brain.readers(s))
         if unread:
             report["unread_spaces"] = unread
-            report["next"] = "No role reads these spaces yet; only the keeper sees them. Use role_grant to share one."
+            report["next"] = "No role reads these spaces; only the keeper sees them. Use role_grant to share one."
         return report
 
     def tool_brain_new(self, name: str, path: str | None = None) -> dict:
-        if self.brain is not None:
-            require_keeper(caller(self.brain))
         root = Path(path).expanduser() if path else self.home / brainlib.folder_name(name)
         brainlib.create(root, str(name).strip())
         self._open(root)
@@ -467,8 +480,6 @@ class Session:
         }
 
     def tool_brain_open(self, brain: str) -> dict:
-        if self.brain is not None:
-            require_keeper(caller(self.brain))
         candidate = Path(brain).expanduser()
         if not (candidate / brainlib.CONFIG).is_file():
             candidate = self.home / brainlib.folder_name(brain)
@@ -477,11 +488,10 @@ class Session:
         return self.tool_status()
 
     def tool_role_add(self, role: str, spaces: list | None = None) -> dict:
-        brain, _ = self.need()
-        require_keeper(caller(brain))
+        brain, _, _ = self.admin()
         if not brainlib.valid_id(role):
             raise BrainError("A role name uses lowercase letters, digits, - or _, and starts with a letter or digit.")
-        if role in brain.roles:
+        if role in brain.roles or role == "keeper":
             raise BrainError(f"The role {role!r} already exists.")
         spaces = [str(s) for s in spaces or []]
         for space in spaces:
@@ -494,8 +504,7 @@ class Session:
         return {"role": role, "spaces": brain.roles[role]}
 
     def tool_role_grant(self, role: str, space: str) -> dict:
-        brain, _ = self.need()
-        require_keeper(caller(brain))
+        brain, _, _ = self.admin()
         current = brain.role_spaces(role)
         if not brainlib.valid_space(space):
             raise BrainError(f"{space!r} is not a valid space name.")
@@ -505,15 +514,13 @@ class Session:
         return {"role": role, "spaces": brain.roles[role]}
 
     def tool_role_revoke(self, role: str, space: str) -> dict:
-        brain, _ = self.need()
-        require_keeper(caller(brain))
+        brain, _, _ = self.admin()
         brain.roles[role] = sorted(brain.role_spaces(role) - {space})
         brain.save()
         return {"role": role, "spaces": brain.roles[role]}
 
     def tool_member_set(self, member: str, name: str | None = None, roles: list | None = None) -> dict:
-        brain, _ = self.need()
-        require_keeper(caller(brain))
+        brain, _, _ = self.admin()
         if not brainlib.valid_id(member):
             raise BrainError("A member id uses lowercase letters, digits, - or _, and starts with a letter or digit.")
         entry = brain.members.get(member) or brainlib.Member(member)
@@ -526,4 +533,5 @@ class Session:
             entry.roles = sorted(set(roles))
         brain.members[member] = entry
         brain.save()
-        return {"member": member, "name": entry.name, "roles": entry.roles}
+        return {"member": member, "name": entry.name, "roles": entry.roles,
+                "note": "Members cannot ask Corunis yet; v0 answers the keeper alone."}

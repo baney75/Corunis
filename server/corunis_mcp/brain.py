@@ -1,4 +1,4 @@
-"""The brain folder: brain.toml, spaces/, notes/ and the .corunis/ index cache.
+"""The brain folder: brain.toml, spaces/ (each space may hold a notes/ folder) and the .corunis/ index cache.
 
 brain.toml holds the brain's name, its keeper, its members and which roles read which spaces.
 Corunis writes it; a keeper may also edit it by hand, so reads tolerate missing tables.
@@ -15,15 +15,16 @@ from pathlib import Path
 
 CONFIG = "brain.toml"
 SPACES = "spaces"
-NOTES = "notes"
+NOTES = "notes"  # spaces/<space>/notes/ holds what members asked Corunis to remember
 CACHE = ".corunis"
 INDEX = "index.sqlite"
 
-# Notes saved without a space go here. It is never a folder under spaces/ (folders starting
-# with a dot are skipped), and only the keeper reads it.
-KEEPER_NOTES = ".keeper"
 DEFAULT_SPACE = "everyone"
+KEEPER_SPACE = "keeper"  # made with a new brain; no role reads it, so the keeper's notes stay private
 DEFAULT_ROLE = "member"
+# A file reachable from several spaces whose readers no single one of those spaces bounds: only the
+# keeper reads it. A dot name is never a folder Corunis reads and never a valid role space.
+LINKED = ".linked"
 
 ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 
@@ -67,10 +68,6 @@ class Brain:
         return self.root / SPACES
 
     @property
-    def notes_dir(self) -> Path:
-        return self.root / NOTES
-
-    @property
     def index_path(self) -> Path:
         return self.root / CACHE / INDEX
 
@@ -87,6 +84,31 @@ class Brain:
         if role not in self.roles:
             raise BrainError(f"There is no role named {role!r}. Roles: {', '.join(sorted(self.roles)) or 'none'}.")
         return set(self.roles[role])
+
+    def narrowest(self, spaces: set[str]) -> str:
+        """Of these spaces, the one the fewest roles read, then the fewest members reach, then by name."""
+        if not spaces:
+            raise BrainError("You cannot read any space, so there is nowhere to save a note.")
+
+        def reach(space: str) -> tuple[int, int, str]:
+            roles = {r for r, readable in self.roles.items() if space in readable}
+            members = sum(1 for m in self.members.values() if roles & set(m.roles))
+            return len(roles), members, space
+
+        return min(spaces, key=reach)
+
+    def readers(self, space: str) -> frozenset[str]:
+        return frozenset(role for role, readable in self.roles.items() if space in readable)
+
+    def most_restrictive(self, spaces: set[str]) -> str:
+        """The space for a file reachable from all these spaces: one whose readers every other space
+        also has, so whoever reads it may read every path; LINKED (keeper only) when none does."""
+        if len(spaces) == 1:
+            return next(iter(spaces))
+        for space in sorted(spaces, key=lambda s: (len(self.readers(s)), s)):
+            if all(self.readers(space) <= self.readers(other) for other in spaces):
+                return space
+        return LINKED
 
     def save(self) -> None:
         lines = [
@@ -142,8 +164,8 @@ def load(root: Path) -> Brain:
 def create(root: Path, name: str) -> Brain:
     if (root / CONFIG).exists():
         raise BrainError(f"A brain already exists at {root}.")
-    (root / SPACES / DEFAULT_SPACE).mkdir(parents=True, exist_ok=True)
-    (root / NOTES).mkdir(exist_ok=True)
+    for space in (DEFAULT_SPACE, KEEPER_SPACE):
+        (root / SPACES / space).mkdir(parents=True, exist_ok=True)
     (root / CACHE).mkdir(exist_ok=True)
     brain = Brain(
         root=root,

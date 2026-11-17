@@ -275,7 +275,6 @@ def write_parish(root: Path, leave_out: set[str] = frozenset()) -> Path:
     """Write the parish brain under root (without its index) and return root."""
     root.mkdir(parents=True, exist_ok=True)
     (root / "brain.toml").write_text(BRAIN_TOML, encoding="utf-8")
-    (root / "notes").mkdir(exist_ok=True)
     for space in SPACES:
         (root / "spaces" / space).mkdir(parents=True, exist_ok=True)
     for rel, content in FILES.items():

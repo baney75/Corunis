@@ -1,4 +1,7 @@
-"""MCP over stdio: newline-delimited JSON-RPC 2.0 on stdin and stdout. No sockets, ever.
+"""MCP over stdio: newline-delimited JSON-RPC 2.0 on stdin and stdout.
+
+The server opens no sockets. The one module allowed a network library is fonsviva.py, a
+loopback-only client for local embeddings (tiers M and L), and nothing imports it yet.
 
 Handles initialize, ping, tools/list, tools/call and notifications. Logs go to stderr.
 """
@@ -67,12 +70,13 @@ class Server:
             arguments = params.get("arguments") or {}
             if not isinstance(arguments, dict):
                 return error(request_id, INVALID_PARAMS, "arguments must be an object")
-            return reply(request_id, self.call(params["name"], arguments))
+            meta = params.get("_meta") if isinstance(params.get("_meta"), dict) else None
+            return reply(request_id, self.call(params["name"], arguments, meta))
         return error(request_id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
-    def call(self, name: str, arguments: dict) -> dict:
+    def call(self, name: str, arguments: dict, meta: dict | None = None) -> dict:
         try:
-            result = self.session.call(name, arguments)
+            result = self.session.call(name, arguments, meta)
         except BrainError as problem:
             return {"content": [{"type": "text", "text": str(problem)}], "isError": True}
         except TypeError as problem:

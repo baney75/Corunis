@@ -196,19 +196,3 @@ def message_text(raw: bytes) -> str:
             content = decode(content) if isinstance(content, bytes) else str(content)
         text = html_text(content) if body.get_content_type() == "text/html" else tidy(content)
     return tidy("\n".join(header) + "\n\n" + text)
-
-
-FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n?", re.S)
-
-
-def frontmatter(text: str) -> tuple[dict[str, str], str]:
-    """Split simple `key: value` frontmatter from a note. Returns (fields, body)."""
-    match = FRONTMATTER.match(text)
-    if not match:
-        return {}, text
-    fields = {}
-    for line in match.group(1).split("\n"):
-        key, sep, value = line.partition(":")
-        if sep:
-            fields[key.strip()] = value.strip().strip('"')
-    return fields, text[match.end():]

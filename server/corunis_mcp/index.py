@@ -12,7 +12,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -26,7 +26,9 @@ CREATE TABLE docs (
     size INTEGER NOT NULL,
     modified TEXT NOT NULL,
     passages INTEGER NOT NULL,
-    error TEXT
+    error TEXT,
+    paths TEXT NOT NULL,   -- JSON list: every path in the brain that reaches this file
+    spaces TEXT NOT NULL   -- JSON list: the space of each of those paths
 );
 CREATE TABLE passages (
     rowid INTEGER PRIMARY KEY,
@@ -56,6 +58,9 @@ class Hit:
     date: str
     score: float
     text: str
+    mtime_ns: int
+    size: int
+    spaces: str
 
 
 class Index:
@@ -110,6 +115,13 @@ class Index:
             return [r[0] for r in self.db.execute("SELECT path FROM docs")]
         return [r[0] for r in self.db.execute("SELECT path FROM docs WHERE substr(path, 1, ?) = ?", (len(prefix), prefix))]
 
+    def snapshot(self) -> dict[str, tuple[int, int]]:
+        """{path: (mtime_ns, size, paths, space)} for every indexed file, to compare against a walk."""
+        return {
+            path: (mtime, size, paths, space)
+            for path, mtime, size, paths, space in self.db.execute("SELECT path, mtime_ns, size, paths, space FROM docs")
+        }
+
     def touch(self, path: str, mtime_ns: int, size: int) -> None:
         self.db.execute("UPDATE docs SET mtime_ns = ?, size = ? WHERE path = ?", (mtime_ns, size, path))
 
@@ -125,15 +137,15 @@ class Index:
         self.db.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
 
     def put(self, path: str, space: str, version: str, mtime_ns: int, size: int, modified: str,
-            passages: list, error: str | None = None) -> None:
+            passages: list, error: str | None = None, paths: str = "[]", spaces: str = "[]") -> None:
         """Replace a document and its passages in one transaction."""
         self.db.execute("BEGIN")
         try:
             self.remove(path)
             doc_id = self.db.execute(
-                "INSERT INTO docs (path, space, version, mtime_ns, size, modified, passages, error)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (path, space, version, mtime_ns, size, modified, len(passages), error),
+                "INSERT INTO docs (path, space, version, mtime_ns, size, modified, passages, error, paths, spaces)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (path, space, version, mtime_ns, size, modified, len(passages), error, paths, spaces),
             ).lastrowid
             if passages:
                 table = self.fts(space, create=True)
@@ -158,7 +170,8 @@ class Index:
                 continue
             rows = self.db.execute(
                 f"""
-                SELECT p.rowid, p.pid, d.path, p.space, p.page, p.start, p.end, d.modified, -m.rank, p.text
+                SELECT p.rowid, p.pid, d.path, p.space, p.page, p.start, p.end, d.modified, -m.rank, p.text,
+                       d.mtime_ns, d.size, d.spaces
                 FROM (SELECT rowid, rank FROM {table} WHERE {table} MATCH ? ORDER BY rank LIMIT ?) AS m
                 JOIN passages p ON p.rowid = m.rowid
                 JOIN docs d ON d.id = p.doc_id
@@ -183,23 +196,31 @@ class Index:
         return counts
 
     def passage(self, pid: str, spaces: set[str]) -> dict | None:
-        """One passage, only if it sits in a space the caller may read; None otherwise."""
+        """One passage, only if it sits in a space the caller may read; None otherwise.
+
+        The space filter is in the SQL, the same as search's, so a restricted id and an unknown
+        id take the same path and give the same None.
+        """
+        if not spaces:
+            return None
+        marks = ",".join("?" * len(spaces))
         row = self.db.execute(
-            "SELECT p.pid, d.path, p.space, p.page, p.start, p.end, d.modified, p.text, p.doc_id, p.seq"
-            " FROM passages p JOIN docs d ON d.id = p.doc_id WHERE p.pid = ?",
-            (pid,),
+            "SELECT p.pid, d.path, p.space, p.page, p.start, p.end, d.modified, p.text, p.doc_id, p.seq, d.mtime_ns, d.size, d.spaces"
+            f" FROM passages p JOIN docs d ON d.id = p.doc_id WHERE p.pid = ? AND p.space IN ({marks})",
+            (pid, *sorted(spaces)),
         ).fetchone()
-        if row is None or row[2] not in spaces:
+        if row is None:
             return None
         neighbors = {
-            seq: pid
-            for pid, seq in self.db.execute(
+            seq: neighbor
+            for neighbor, seq in self.db.execute(
                 "SELECT pid, seq FROM passages WHERE doc_id = ? AND seq IN (?, ?)", (row[8], row[9] - 1, row[9] + 1)
             )
         }
         return {
             "id": row[0], "document": row[1], "space": row[2], "page": row[3], "start": row[4], "end": row[5],
             "date": row[6], "text": row[7], "previous": neighbors.get(row[9] - 1), "next": neighbors.get(row[9] + 1),
+            "mtime_ns": row[10], "size": row[11], "spaces": row[12],
         }
 
     def counts(self, spaces: set[str]) -> dict[str, dict[str, int]]:
@@ -211,5 +232,6 @@ class Index:
                 result[space] = {"documents": documents, "passages": passages}
         return result
 
-    def failures(self) -> list[tuple[str, str]]:
-        return list(self.db.execute("SELECT path, error FROM docs WHERE error IS NOT NULL ORDER BY path"))
+    def failures(self, spaces: set[str]) -> list[tuple[str, str]]:
+        rows = self.db.execute("SELECT path, error, space FROM docs WHERE error IS NOT NULL ORDER BY path")
+        return [(path, error) for path, error, space in rows if space in spaces]
