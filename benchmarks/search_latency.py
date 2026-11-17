@@ -124,6 +124,7 @@ def main() -> int:
     parser.add_argument("--max-load", type=float, default=8.0)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--out", type=Path, default=ROOT / "benchmarks" / "results")
+    parser.add_argument("--work", type=Path, default=None, help="where to build the throwaway brain (default: system temp)")
     args = parser.parse_args()
 
     load_before = os.getloadavg()
@@ -131,7 +132,7 @@ def main() -> int:
         print(f"skip: 1-minute load {load_before[0]:.2f} is not under {args.max_load}", file=sys.stderr)
         return 3
     identity.remote_serving = lambda: False  # a benchmark of search, not of the Remote check
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=args.work) as tmp:
         root = Path(tmp) / "Speed Test"
         files, samples = build(root, args.passages, args.per_file, args.seed)
         session = Session(home=Path(tmp), brain_path=root)
