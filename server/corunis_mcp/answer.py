@@ -21,16 +21,16 @@ MIN_QUOTE = 4
 MAX_ANSWER = 20_000
 
 QUOTE_MAP = str.maketrans({
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",
-    "“": '"', "”": '"', "„": '"', "‟": '"',
-    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "−": "-",
-    " ": " ", "…": "...",
+    "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+    "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2212": "-",
+    "\u00a0": " ", "\u2026": "...",
 })
 
 BRACKET = re.compile(r"\[([^\[\]]*)\]")
 CITATION = re.compile(r"(p[0-9a-f]{15})\s*:?\s*\"([^\"]*)\"")
 DERIVED = re.compile(r"^\s*derived\b[:\s]*(.*)$", re.I | re.S)
-LIST_MARK = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+LIST_MARK = re.compile(r"^\s*(?:[-*\u2022]|\d+[.)])\s+")
 SENTENCE_END = re.compile(r"[.!?]+[\"')]*\s+")
 ABBREVIATIONS = {"st", "mr", "mrs", "ms", "dr", "fr", "sr", "jr", "rev", "mt", "no", "vs", "etc", "e.g", "i.e", "a.m", "p.m", "inc", "co", "msgr", "dept"}
 

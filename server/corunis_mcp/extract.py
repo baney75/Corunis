@@ -118,7 +118,7 @@ def html_text(markup: str) -> str:
 
 def tidy(text: str) -> str:
     """Collapse runs of spaces inside lines and runs of blank lines, keeping paragraph breaks."""
-    lines = [re.sub(r"[ \t ]+", " ", line).strip() for line in normalize_newlines(text).split("\n")]
+    lines = [re.sub(r"[ \t\u00a0]+", " ", line).strip() for line in normalize_newlines(text).split("\n")]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
