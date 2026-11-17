@@ -119,3 +119,21 @@ def test_ingest_of_one_folder(parish):
     (parish.brain.root / "spaces/staff/roster.txt").write_text("Staff roster for October.", encoding="utf-8")
     report = parish.tool_ingest("spaces/council")
     assert report["files"]["added"] == ["spaces/council/agenda.txt"]
+
+
+def test_large_spaces_rank_by_selective_terms(parish, monkeypatch):
+    """A term in more than half a large space's passages adds about nothing to BM25, so it is left
+    out of the ranking query; when every term is that common, the rarest one still ranks."""
+    from corunis_mcp import index as indexlib
+
+    table = parish.index.fts("everyone")
+    rows = parish.index.db.execute("SELECT count(*) FROM passages WHERE space = 'everyone'").fetchone()[0]
+    assert parish.index.selective(table, "everyone", ['"mass"', '"zebra"']) == ['"mass"', '"zebra"']  # small: unchanged
+    monkeypatch.setattr(indexlib, "PRUNE_MIN_ROWS", 1)
+    common = [p for p in ('"the"', '"parish"', '"is"') if parish.index.db.execute(
+        f"SELECT count(*) FROM {table} WHERE {table} MATCH ?", (p,)).fetchone()[0] > rows / 2]
+    assert common, "need a term in most everyone passages"
+    assert parish.index.selective(table, "everyone", [common[0], '"larkfield"', '"zebra"']) == ['"larkfield"']
+    assert parish.index.selective(table, "everyone", [common[0], '"zebra"']) == [common[0]]
+    assert parish.index.selective(table, "everyone", ['"zebra"']) == []
+    assert parish.tool_search("When is the parish picnic and where?")["answerable"]

@@ -51,12 +51,17 @@ def in_scope(rel: str, scope: str) -> bool:
 class Found:
     """One real file and every path in the brain that reaches it."""
 
-    file: Path
+    root: str
+    rel: str
     mtime_ns: int
     size: int
     paths: list[str]
     spaces: list[str]
     space: str
+
+    @property
+    def file(self) -> Path:
+        return Path(self.root) / self.rel
 
     def key(self) -> tuple[int, int, str, str]:
         return self.mtime_ns, self.size, json.dumps(self.paths), self.space
@@ -71,16 +76,22 @@ def walk(brain: Brain) -> tuple[dict[str, Found], list[dict]]:
     Symlinked files and folders are followed, so a file reachable from several spaces (by a
     symlink, an alias that is a symlink, or a hard link) is one entry with all its paths, placed
     in the most restrictive of their spaces. Links that lead outside spaces/ are skipped.
+
+    This runs before every tool call, so it works on strings: a real path is resolved with
+    realpath only for a link (and for every entry on Windows, where a junction is not a symlink).
     """
-    root = Path(os.path.realpath(brain.root))
-    spaces_root = root / brainlib.SPACES
-    groups: dict[tuple[int, int], dict] = {}
+    root = os.path.realpath(brain.root)
+    spaces_root = os.path.join(root, brainlib.SPACES)
+    groups: dict[tuple[int, int], tuple[list[str], list[str], os.stat_result]] = {}
     skipped: list[dict] = []
-    if not brain.spaces_dir.is_dir():
+    if not os.path.isdir(spaces_root):
         return {}, skipped
-    stack: list[tuple[str, str, frozenset]] = [(str(brain.spaces_dir), brainlib.SPACES, frozenset())]
+    if os.path.realpath(brain.spaces_dir) != spaces_root:
+        return {}, [{"file": brainlib.SPACES, "reason": "it links outside the brain's spaces folder"}]
+    resolve_all = os.name == "nt"
+    stack: list[tuple[str, str, str, frozenset]] = [(str(brain.spaces_dir), brainlib.SPACES, brainlib.SPACES, frozenset())]
     while stack:
-        folder, rel_folder, ancestors = stack.pop()
+        folder, rel_folder, real_folder, ancestors = stack.pop()
         try:
             entries = list(os.scandir(folder))
         except OSError:
@@ -90,33 +101,44 @@ def walk(brain: Brain) -> tuple[dict[str, Found], list[dict]]:
                 continue
             rel = f"{rel_folder}/{entry.name}"
             try:
-                info = os.stat(entry.path)
+                # follows links; on Windows DirEntry.stat() leaves st_ino and st_dev at 0, so ask os.stat
+                info = os.stat(entry.path) if resolve_all else entry.stat()
             except OSError:
                 continue  # a dangling link
-            real = Path(os.path.realpath(entry.path))
-            if real != spaces_root and spaces_root not in real.parents:
-                skipped.append({"file": rel, "reason": "it links outside the brain's spaces folder"})
-                continue
-            real_rel = real.relative_to(root).as_posix()
-            if any(part.startswith((".", "~$")) for part in real_rel.split("/")):
-                continue
+            if resolve_all or entry.is_symlink():
+                real = os.path.realpath(entry.path)
+                if real != spaces_root and not real.startswith(spaces_root + os.sep):
+                    skipped.append({"file": rel, "reason": "it links outside the brain's spaces folder"})
+                    continue
+                real_rel = real[len(root) + 1:].replace(os.sep, "/")
+                if any(part.startswith((".", "~$")) for part in real_rel.split("/")):
+                    continue
+            else:
+                real_rel = f"{real_folder}/{entry.name}"
             if stat.S_ISDIR(info.st_mode):
                 node = (info.st_dev, info.st_ino)
                 if node not in ancestors and len(ancestors) < MAX_DEPTH:
-                    stack.append((entry.path, rel, ancestors | {node}))
+                    stack.append((entry.path, rel, real_rel, ancestors | {node}))
             elif stat.S_ISREG(info.st_mode) and rel.count("/") >= 2 and real_rel.count("/") >= 2:
-                group = groups.setdefault((info.st_dev, info.st_ino), {"paths": set(), "reals": set(), "info": info})
-                group["paths"].update((rel, real_rel))
-                group["reals"].add(real_rel)
+                group = groups.get((info.st_dev, info.st_ino))
+                if group is None:
+                    groups[(info.st_dev, info.st_ino)] = ([rel] if rel == real_rel else [rel, real_rel], [real_rel], info)
+                else:
+                    group[0].extend((rel, real_rel))
+                    group[1].append(real_rel)
     found: dict[str, Found] = {}
-    for group in groups.values():
-        paths = sorted(group["paths"])
-        spaces = sorted({path.split("/")[1] for path in paths})
+    for paths, reals, info in groups.values():
+        if len(paths) == 1:  # the usual file: one path, in one space
+            rel = paths[0]
+            space = rel.split("/", 2)[1]
+            found[rel] = Found(root, rel, info.st_mtime_ns, info.st_size, paths, [space], space)
+            continue
+        paths = sorted(set(paths))
+        spaces = sorted({path.split("/", 2)[1] for path in paths})
         space = brain.most_restrictive(set(spaces))
         # Name a hard-linked file by its path in the space it is placed in, when it has one there.
-        key = min(group["reals"], key=lambda real: (real.split("/")[1] != space, real))
-        info = group["info"]
-        found[key] = Found(root / key, info.st_mtime_ns, info.st_size, paths, spaces, space)
+        key = min(set(reals), key=lambda real: (real.split("/")[1] != space, real))
+        found[key] = Found(root, key, info.st_mtime_ns, info.st_size, paths, spaces, space)
     return found, skipped
 
 

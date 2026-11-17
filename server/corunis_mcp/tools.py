@@ -323,7 +323,7 @@ class Session:
             "terms": terms,
         }
         phrases = [fts_term(t) for t in terms]
-        hits = index.search(" OR ".join(phrases), set(who.spaces), max(k, CANDIDATES)) if terms else []
+        hits = index.search(phrases, set(who.spaces), max(k, CANDIDATES)) if terms else []
         hits = [h for h in hits if self.fresh(brain, h.document, h.mtime_ns, h.size, h.spaces, who)]
         covered: dict[int, int] = {}
         for space in {h.space for h in hits}:

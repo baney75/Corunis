@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCHEMA_VERSION = "2"
+# In a space this large, a term in more than half its passages is left out of the ranking query:
+# FTS5's BM25 gives it an IDF of about zero, yet matching it makes SQLite score nearly every row.
+PRUNE_MIN_ROWS = 1000
 
 SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -161,12 +164,15 @@ class Index:
             self.db.execute("ROLLBACK")
             raise
 
-    def search(self, expression: str, spaces: set[str], limit: int) -> list[Hit]:
-        """Top passages for an FTS5 expression, read only from the given spaces' tables."""
+    def search(self, phrases: list[str], spaces: set[str], limit: int) -> list[Hit]:
+        """Top passages for any of the FTS5 phrases, read only from the given spaces' tables."""
         hits: list[Hit] = []
         for space in sorted(spaces):
             table = self.fts(space)
             if table is None:
+                continue
+            selective = self.selective(table, space, phrases)
+            if not selective:
                 continue
             rows = self.db.execute(
                 f"""
@@ -177,11 +183,27 @@ class Index:
                 JOIN docs d ON d.id = p.doc_id
                 WHERE p.space = ?
                 """,
-                (expression, limit, space),
+                (" OR ".join(selective), limit, space),
             )
             hits.extend(Hit(*row) for row in rows)
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits[:limit]
+
+    def selective(self, table: str, space: str, phrases: list[str]) -> list[str]:
+        """The phrases worth ranking by in one space: all of them in a small space; in a large one,
+        those in at most half its passages, or the rarest one when every phrase is that common."""
+        rows = self.db.execute(
+            "SELECT coalesce(sum(passages), 0) FROM docs WHERE space = ? AND error IS NULL", (space,)
+        ).fetchone()[0]
+        if rows < PRUNE_MIN_ROWS:
+            return list(phrases)
+        found = {}
+        for phrase in phrases:
+            count = self.db.execute(f"SELECT count(*) FROM {table} WHERE {table} MATCH ?", (phrase,)).fetchone()[0]
+            if count:
+                found[phrase] = count
+        keep = [phrase for phrase, count in found.items() if count <= rows / 2]
+        return keep or sorted(found, key=found.get)[:1]
 
     def coverage(self, space: str, rowids: list[int], terms: list[str]) -> dict[int, int]:
         """For each rowid, how many of the terms (FTS5 phrase strings) its passage contains."""
