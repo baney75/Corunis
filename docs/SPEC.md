@@ -113,8 +113,9 @@ These results go in the catalog entry for each tier, with the model, hardware, d
 
 On the same four corpora and question sets, with the same local model:
 
-1. Against the strongest open-source local rivals the study names (AnythingLLM, Open WebUI knowledge and Khoj at least), Corunis wins if its correctness is at least 5 points higher than the best of them, its abstention accuracy is higher, and its leak count is 0 where theirs is measured with the same roles.
-2. Against cloud rivals (NotebookLM, Notion AI, Glean, Mem, Capacities): the study compares price, offline use, citation depth, roles and published accuracy. A hands-on run with the synthetic corpus needs an account, so it waits for Donovan's yes and is otherwise marked not measured.
+1. Against the strongest open-source local rivals the study names (RAGFlow, Onyx, Kotaemon, AnythingLLM and Open WebUI), Corunis wins if its correctness is at least 5 points higher than the best of them, its abstention accuracy is higher, and its leak count is 0 where theirs is measured with the same roles.
+2. On the public EnterpriseRAG-Bench, where those rivals already have published scores (best self-hostable open-source app: RAGFlow at 50.2), Corunis on a GPU host with a tier M model scores above 50.2. That leaderboard is run by Onyx, a rival, so it is a floor, not the whole proof.
+3. Against cloud rivals (NotebookLM, Notion AI, Glean, Mem, Capacities): the study compares price, offline use, citation depth, roles and published accuracy. A hands-on run with the synthetic corpus needs an account, so it waits for Donovan's yes and is otherwise marked not measured.
 
 A blind council scores the final dev build in chat with one corpus: answer quality, honesty when the answer is missing, and how it feels to use.
 
