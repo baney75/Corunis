@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-17T19:36:22+00:00",
+  "host": "chapel1",
+  "cpu": "x86_64",
+  "cores": 8,
+  "python": "3.12.14",
+  "sqlite": "3.53.1",
+  "load_before": [
+    7.9,
+    10.21,
+    11.39
+  ],
+  "load_after": [
+    10.69,
+    10.75,
+    11.44
+  ],
+  "files": 2500,
+  "passages": 50000,
+  "ingest": {
+    "seconds": 21.1,
+    "added": 2500
+  },
+  "bar_p95_ms": 200,
+  "runs": [
+    {
+      "as": "keeper",
+      "queries": 300,
+      "answerable": 300,
+      "p50_ms": 86.5,
+      "p95_ms": 159.4,
+      "max_ms": 271.6,
+      "mean_ms": 94.2
+    },
+    {
+      "as": "member",
+      "queries": 300,
+      "answerable": 300,
+      "p50_ms": 60.5,
+      "p95_ms": 94.9,
+      "max_ms": 305.9,
+      "mean_ms": 63.4
+    }
+  ],
+  "pass": true
+}
