@@ -2,9 +2,11 @@
 
 Formerly UniCerebrum. The name is Latin *cor* + *unus*, "of one heart" (Acts 4:32).
 
-Corunis is an open-source organizational brain for universities. It is completely local, private, safe and secure: the AI runs on the university's own hardware, and its data never leaves campus.
+Corunis is an open-source organizational brain for any group: a family, a parish, a small business, a class, a team, or a university. It is completely local, private, safe and secure: the AI runs on the group's own hardware, answers only from the group's own documents with citations, and its data never leaves the group.
 
-## What it will do (planned)
+The first version ships as a plugin for [Local Studio](https://github.com/baney75/local-studio). Its plan, evals and bars are in [docs/SPEC.md](docs/SPEC.md).
+
+## What it will do for a university (planned, after v0)
 
 Nothing below is built yet. See [SUPPORTED.md](SUPPORTED.md) for what works today.
 
