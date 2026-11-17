@@ -37,16 +37,16 @@ St. Brigid Parish/
     everyone/         bulletins, schedules, the handbook
     council/          minutes, budgets
     staff/            payroll notes, personnel
-  notes/              what members told Corunis to remember, each with author and date
+      notes/          what members told Corunis to remember, each with author and date, kept in a space like any file
   .corunis/           the index (SQLite), rebuilt from the files at any time
 ```
 
-Spaces are plain folders, so the keeper manages access by dragging files, and backup is copying the folder. `brain.toml` maps roles to spaces in a few lines; Corunis writes it and changes it through chat (`/brain role add council`), so the keeper never has to edit it by hand.
+Spaces are plain folders, so the keeper manages access by dragging files, and backup is copying the folder. A remembered note is saved in a space's `notes/` folder: the space the member picks, or by default the narrowest space that member can read, and it is filtered like any document. The index follows the folder: a file watcher updates a moved or changed file's space before the next search, and `search` also checks each result's current path against `brain.toml` at query time, so a file dragged into a restricted space is never served from a stale index entry. `brain.toml` maps roles to spaces in a few lines; Corunis writes it and changes it through chat (`/brain role add council`), so the keeper never has to edit it by hand.
 
 ### The plugin
 
 - `plugin.toml`: id `corunis`, capability `mcp-server`, commands `/brain` (ask, add, remember, roles) pointing at the `corunis` skill, with tier cards `tiers/S.md`, `M.md`, `L.md` like smoothstone.
-- `corunis-mcp`: the plugin's MCP server, Python 3.11+ with the standard library and `sqlite3` only for tier S. Tools: `search(question)` returns passages the caller may read, each with a stable id, document, page and character range; `open(passage_id)`; `verify(answer)` checks every quoted span against its cited passage and returns the claims that fail; `remember(note)`; `ingest(path)`; `status()`.
+- `corunis-mcp`: the plugin's MCP server, Python 3.11+ with the standard library and `sqlite3` only for tier S. Every tool that takes a passage id or returns document content (`search`, `open`, `verify` and the side panel) applies the same role filter in SQL. A restricted id gets exactly the reply a nonexistent id gets, and ids are opaque hashes, not counters, so they cannot be guessed or enumerated. Tools: `search(question)` returns passages the caller may read, each with a stable id, document, page and character range; `open(passage_id)`; `verify(answer)` checks every quoted span against its cited passage and returns the claims that fail. A quote being present is not enough: every number, date and proper name in a claim must also appear in its quote, so "the 2026 budget is $40,000" cannot stand on a quote that says "the 2025 budget was $40,000"; `remember(note)`; `ingest(path)`; `status()`.
 - Index: SQLite FTS5 (BM25) for every tier. Tiers M and L add a small local embedding model through Fonsviva for hybrid ranking. Ingest reads text, Markdown, HTML, PDF text, DOCX and email exports; scanned images wait for a later slice.
 
 ### Answering
@@ -60,7 +60,7 @@ Spaces are plain folders, so the keeper manages access by dragging files, and ba
 
 v0 runs on one host machine that owns the brain: the keeper's desktop, or a small always-on box. Members reach it through Local Studio Remote (the phone protocol, local-studio PR #4) from the iPhone app or another desktop. This keeps one place that enforces roles, which a synced folder on every member's machine cannot do.
 
-Until the core tells a plugin which member is asking, v0 serves one member at a time: the keeper, plus an "ask as" switch to check what a role would see. Multi-member answering ships when the identity ask below lands.
+Until the core tells a plugin which member is asking, v0 fails closed: the keeper's full view is served only in a session running on the host itself, and any session that reaches the brain through Remote is served as the lowest role (the `everyone` space and nothing else). The keeper also gets an "ask as" switch to check what a role would see. Multi-member roles over Remote ship when the identity ask below lands.
 
 ## Capabilities it asks for
 
@@ -74,7 +74,9 @@ What the plugin API lacks, filed as issues on baney75/local-studio:
 
 ## What runs locally
 
-Everything. The MCP server opens no network sockets except its stdio channel; a CI check fails the build if the server imports a networking module. Embeddings and answers go through Fonsviva on the host.
+Everything. The MCP server talks over stdio and opens one other connection at most: a loopback client to Fonsviva's embedding endpoint for tiers M and L, in a single module that refuses any address that is not 127.0.0.1 or ::1. A CI check fails the build if any other module imports a networking library. Answers go through Fonsviva on the host.
+
+Until `local_only` lands in the core, the skill checks the session's provider before every answer and refuses in a session whose provider is not local, so no passage or question reaches a cloud model.
 
 ## Evals
 
@@ -95,7 +97,7 @@ Scores: answer correctness (judged against the gold answer by a blind judge mode
 
 ### Bars per tier
 
-| Measure | S (about 3B and under) | M (about 4B to 30B) | L (frontier, local or not) |
+| Measure | S (about 3B and under) | M (about 4B to 30B) | L (the largest local models, over 30B) |
 | --- | --- | --- | --- |
 | Correct on answerable questions | 70% | 85% | 92% |
 | Citation precision | 90% | 95% | 97% |
@@ -103,7 +105,7 @@ Scores: answer correctness (judged against the gold answer by a blind judge mode
 | Abstains when it should have answered | 15% or less | 10% or less | 5% or less |
 | Leaks | 0 | 0 | 0 |
 
-Leaks are 0 at every tier because roles are enforced before the model runs; the leak eval proves that structure holds.
+Leaks are 0 at every tier because roles are enforced before the model runs; the leak eval proves that structure holds. It includes cases that call `open` and `verify` directly with restricted ids, a remembered note made in a restricted space, a file just moved into a restricted space, a Remote session with no identity, and an unsupported claim attached to a real quote.
 
 Speed, measured on chapel1 (8 cores, no GPU): ingest of 500 mixed documents in under 5 minutes; `search` at the 95th percentile under 200 ms over 50,000 passages.
 
