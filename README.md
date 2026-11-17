@@ -29,7 +29,7 @@ Corunis will help a university with day-to-day work:
 
 Corunis will learn from open work on organizational AI and cite it here as we use it. What sets it apart is that it is fully local.
 
-## First version (planned)
+## University edition (planned, after v0)
 
 The first version is sign-in with roles and a role-aware assistant that answers from the school's own documents with citations, and it works on a phone as an installable PWA (the same app), built while we find a pilot school. Then come an audit log, memory, Canvas and Moodle connectors, grants and student support workspaces, and backup. The pilot school picks what matters most after that. The first Dev release is planned for Feb 1, 2027.
 

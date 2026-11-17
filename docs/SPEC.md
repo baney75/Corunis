@@ -7,7 +7,7 @@ Corunis is an organizational brain for any group, not only universities (Donovan
 ## Who it is for
 
 - **The keeper**: the one person who sets the brain up and adds documents. Not technical. A parish secretary, a parent, an office manager, a teacher.
-- **Members**: everyone else in the group. They ask questions in chat, from a desktop or the Local Studio iPhone app, and see only what their role may see.
+- **Members** (after v0, when the core asks under Members and roles land): everyone else in the group. They ask questions in chat, from a desktop or the Local Studio iPhone app, and see only what their role may see.
 
 ## The promise
 
@@ -52,15 +52,26 @@ Spaces are plain folders, so the keeper manages access by dragging files, and ba
 ### Answering
 
 1. The skill calls `search`. The MCP server filters by the caller's roles in SQL first, then ranks. Restricted passages never enter the model's context.
-2. The model writes an answer where every claim carries a passage id and a short quote.
-3. The skill calls `verify`. A claim whose quote is not in its passage is dropped. If no claim survives, or `search` found nothing above its threshold, the answer is "The documents I can see don't answer this," followed by what it searched.
+2. The model writes an answer where every claim carries one or more passage ids, each with a short quote. A claim that combines sources (a multi-source answer, two conflicting figures) cites each passage it uses. A derived value (a sum, "three days before") is marked derived and cites the passages its inputs come from.
+3. The skill calls `verify`, which splits the whole answer into sentences itself, never trusting the model to mark which ones are claims. A sentence with no valid citation is dropped, except the fixed abstention sentence. A cited sentence stands only when every quote is in its passage and every number, date and proper name in it appears in the union of its quotes (for a derived value, its inputs do). If no claim survives, or `search` found nothing above its threshold, the answer is "The documents I can see don't answer this," followed by what it searched.
 4. The chat shows the answer with citations; each opens the passage in a side panel.
 
 ### Members and roles
 
-v0 runs on one host machine that owns the brain: the keeper's desktop, or a small always-on box. Members reach it through Local Studio Remote (the phone protocol, local-studio PR #4) from the iPhone app or another desktop. This keeps one place that enforces roles, which a synced folder on every member's machine cannot do.
+The brain lives on one host machine: the keeper's desktop, or a small always-on box. Later, members reach it through Local Studio Remote (the phone protocol, local-studio PR #4) from the iPhone app or another desktop, which keeps one place that enforces roles, something a synced folder on every member's machine cannot do.
 
-Until the core tells a plugin which member is asking, v0 fails closed: the keeper's full view is served only in a session running on the host itself, and any session that reaches the brain through Remote is served as the lowest role (the `everyone` space and nothing else). The keeper also gets an "ask as" switch to check what a role would see. Multi-member roles over Remote ship when the identity ask below lands.
+v0 is the keeper alone. A Remote session runs on the host with the session's tools, including bash, so it could read the brain folder directly; no plugin can close that. Member access ships only when the core provides both of these, and until then every Corunis tool refuses to serve a member:
+
+1. a caller identity the core signs (issue #8), including whether the session is local to the host or Remote;
+2. member sessions that the core limits to Corunis's own tools, with no bash, file or web tools (added to issue #8).
+
+Rules that hold from v0 on, enforced in `corunis-mcp`, not in the skill:
+
+- Admin tools (`ingest`, `/brain add`, `/brain roles`, `role_add`, `role_grant`, `member_set`) answer only the keeper. `ingest` resolves every path to its real path and refuses anything outside the brain folder.
+- "Ask as" can only lower privilege, never raise it.
+- Every file is indexed under its real path; a file reachable through a symlink, alias or hard link in another space gets the most restrictive space of all its paths.
+- `status()` and every progress message report only counts and names from spaces the caller may read, and progress goes only to the session that started the ingest.
+- When members arrive, a note a member writes goes to a space only that member and the keeper can read, enters a shared space only after the keeper approves it, and is cited as "member note" with its author, never as a document.
 
 ## Capabilities it asks for
 
@@ -68,15 +79,17 @@ Until the core tells a plugin which member is asking, v0 fails closed: the keepe
 
 What the plugin API lacks, filed as issues on baney75/local-studio:
 
-1. **Caller identity**: the MCP server needs the member identity of the session that calls it (from Remote's per-device credentials), signed by the core so a plugin cannot be told it is someone else.
+1. **Caller identity and member sessions**: the MCP server needs the member identity of the session that calls it, signed by the core, including whether it is local or Remote; and member sessions limited to the plugin's own tools.
 2. **`local_only`**, the same ask as UntoCaesar: refuse to run the plugin in a session whose provider is not local, and turn off web tools in that session.
 3. **Background work**: a way for the MCP server to post progress into chat while ingest runs.
 
 ## What runs locally
 
-Everything. The MCP server talks over stdio and opens one other connection at most: a loopback client to Fonsviva's embedding endpoint for tiers M and L, in a single module that refuses any address that is not 127.0.0.1 or ::1. A CI check fails the build if any other module imports a networking library. Answers go through Fonsviva on the host.
+Everything. The MCP server talks over stdio and opens one other connection at most: a loopback client to Fonsviva's embedding endpoint for tiers M and L, in a single module that refuses any address that is not 127.0.0.1 or ::1. A CI check fails the build if any other module imports a networking library.
 
-Until `local_only` lands in the core, the skill checks the session's provider before every answer and refuses in a session whose provider is not local, so no passage or question reaches a cloud model.
+Loopback is not enough, because Fonsviva can route a job to a cloud provider. Every embedding call, at ingest and at question time, asks Fonsviva for local hardware only and requires its reply to say where the job ran; a reply that is missing that or names anything but the host stops the ingest or the answer (asked of the Fonsviva lead in an issue on baney75/Fonsviva).
+
+A skill cannot stop a session on a cloud model: by the time it runs, the question has already reached that provider. So Corunis cannot keep its no-cloud promise until the core's `local_only` (issue #7) lands. Until then it ships on the dev channel only, never nightly or stable, and the catalog listing says it does not yet block cloud sessions.
 
 ## Evals
 
@@ -105,7 +118,7 @@ Scores: answer correctness (judged against the gold answer by a blind judge mode
 | Abstains when it should have answered | 15% or less | 10% or less | 5% or less |
 | Leaks | 0 | 0 | 0 |
 
-Leaks are 0 at every tier because roles are enforced before the model runs; the leak eval proves that structure holds. It includes cases that call `open` and `verify` directly with restricted ids, a remembered note made in a restricted space, a file just moved into a restricted space, a Remote session with no identity, and an unsupported claim attached to a real quote.
+Leaks are 0 at every tier because roles are enforced before the model runs; the leak eval proves that structure holds. It includes cases that call `open` and `verify` directly with restricted ids, a remembered note made in a restricted space, a file just moved into a restricted space, a restricted file reached through a symlink, `ingest` of a path outside the brain, `status()` during a restricted ingest, a Remote session with no identity or one that claims to be the keeper, "ask as" set to a higher role, Fonsviva set up with a cloud provider, an unsupported claim attached to a real quote, and an answer with an uncited sentence.
 
 Speed, measured on chapel1 (8 cores, no GPU): ingest of 500 mixed documents in under 5 minutes; `search` at the 95th percentile under 200 ms over 50,000 passages.
 
