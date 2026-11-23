@@ -336,3 +336,20 @@ def test_status_and_ingest_progress_name_only_readable_spaces(parish):
     assert "staff" not in json.dumps(after) and "new-hire" not in json.dumps(after)
     for role in ("member", "council"):
         assert "broken.docx" not in json.dumps(parish.tool_status(as_role=role))
+
+
+def test_file_moved_into_a_restricted_space_and_replaced_by_a_link_is_not_served(parish, monkeypatch):
+    """A swap between sync and the freshness check: the old path now links to a staff file."""
+    root = parish.brain.root
+    question = "When is the Saturday vigil Mass?"
+    before = parish.tool_search(question, as_role="member")
+    assert before["answerable"] and before["passages"][0]["document"] == "spaces/everyone/bulletin-2026-10-05.md"
+    pid = before["passages"][0]["id"]
+    from corunis_mcp import tools as toolsmod
+    monkeypatch.setattr(toolsmod, "sync", lambda brain, index: None)  # the swap lands after this call's sync
+    moved = root / "spaces/staff/bulletin-2026-10-05.md"
+    os.rename(root / "spaces/everyone/bulletin-2026-10-05.md", moved)
+    link_or_skip("symlink", moved, root / "spaces/everyone/bulletin-2026-10-05.md")
+    after = parish.tool_search(question, k=20, include_weak=True, as_role="member")
+    assert all("bulletin-2026-10-05" not in p["document"] for p in after["passages"]), after
+    assert parish.tool_open(pid, as_role="member") == {"found": False, "message": NOT_FOUND}

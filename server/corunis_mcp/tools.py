@@ -292,8 +292,14 @@ class Session:
         parts = document.split("/")
         if len(parts) < 3 or parts[0] != brainlib.SPACES:
             return False
+        root = os.path.realpath(brain.root)
+        indexed = os.path.join(root, *parts)
         try:
-            stat = (brain.root / document).stat()
+            # The index names each file by its real path; a file moved away and replaced by a link
+            # (to anywhere, even inside spaces/) is no longer the indexed file.
+            if os.path.normcase(os.path.realpath(indexed)) != os.path.normcase(indexed):
+                return False
+            stat = os.stat(indexed)
         except OSError:
             return False
         return stat.st_mtime_ns == mtime_ns and stat.st_size == size
@@ -359,7 +365,7 @@ class Session:
         cited = 0
         for sentence in answerlib.sentences(str(answer)):
             if answerlib.is_abstention(sentence):
-                kept.append({"sentence": sentence.raw, "abstention": True})
+                kept.append({"sentence": NO_ANSWER, "abstention": True})
                 continue
             reason, sources = self.check_sentence(brain, index, who, sentence)
             if reason:

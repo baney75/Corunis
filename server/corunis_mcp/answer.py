@@ -149,10 +149,20 @@ def unsupported_facts(sentence: str, quotes: list[str], derived: set[str]) -> li
     quoted = facts(joined)
     values = {value for _, value, _ in quoted}
     with_units = {(value, unit) for _, value, unit in quoted}
+    quote_units = {unit for _, _, unit in quoted if unit}
     quote_words = set(re.findall(r"[^\W_]+", joined.casefold()))
+
+    def computed(value: str, unit: str | None) -> bool:
+        # A derived value is one the quotes do not state; a quoted number keeps its quoted unit.
+        # A computed value's unit must be one its quotes use, or days counted between their dates.
+        # Quotes with no numbers at all are left to underived(), which always rejects them.
+        if value not in derived or value in values:
+            return False
+        return not values or unit is None or unit in quote_units or (unit == "days" and DATE.search(joined) is not None)
+
     missing = [
         shown for shown, value, unit in facts(sentence)
-        if value not in derived and (value, unit) not in with_units and not (unit is None and value in values)
+        if not computed(value, unit) and (value, unit) not in with_units and not (unit is None and value in values)
     ]
     missing += [w for w in names_in(sentence) if w.casefold() not in quote_words]
     return list(dict.fromkeys(missing))
@@ -247,4 +257,5 @@ def sentences(answer: str) -> list[Sentence]:
 
 
 def is_abstention(sentence: Sentence) -> bool:
-    return not sentence.citations and normalize(sentence.text).rstrip(".") == normalize(NO_ANSWER).rstrip(".")
+    """The fixed abstention sentence, alone: any bracket on it (citation, derived marker or stray) disqualifies it."""
+    return not BRACKET.search(sentence.raw) and normalize(sentence.text).rstrip(".") == normalize(NO_ANSWER).rstrip(".")

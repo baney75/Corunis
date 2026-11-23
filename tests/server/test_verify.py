@@ -174,3 +174,21 @@ def test_spelled_out_numbers_are_checked_too(parish):
         f'No one may skip it: training is renewed every two years [{pid} "Safe environment training must be renewed every two years"].',
     ):
         assert len(parish.tool_verify(answer)["kept"]) == 1, answer
+
+
+def test_abstention_with_a_bracket_is_not_an_abstention(parish):
+    roof = pid_with(parish, "Ardent Roofing bid 61,250 dollars")
+    answer = (
+        f"{NO_ANSWER} [The alarm code is 1234]\n"
+        f'Ardent Roofing bid 61,250 dollars [{roof} "Ardent Roofing bid 61,250 dollars"].'
+    )
+    result = parish.tool_verify(answer)
+    assert "1234" not in result["answer"] and "alarm" not in result["answer"], result
+    assert all("1234" not in k["sentence"] for k in result["kept"])
+    assert any("1234" in d["sentence"] for d in result["dropped"])
+
+
+def test_derived_marker_does_not_change_a_quoted_numbers_unit(parish):
+    roof = pid_with(parish, "Ardent Roofing bid 61,250 dollars")
+    result = parish.tool_verify(f'Ardent Roofing bid 61,250 days [derived 61,250] [{roof} "Ardent Roofing bid 61,250 dollars"].')
+    assert result["kept"] == [] and "61,250 days" in result["dropped"][0]["reason"], result
