@@ -1,0 +1,13 @@
+id = "corunis"
+version = "0.1.0"
+description = "Corunis for Local Studio: a brain for your group's documents that answers only from them, with a quote for every claim, and keeps each space to the roles that may read it"
+skills = "skills/plugin"
+capabilities = ["mcp-server"]
+
+[[commands]]
+name = "brain"
+description = "Ask your documents, add files, remember a note, or set roles"
+skill = "corunis"
+
+[mcp]
+command = "bin/corunis-mcp"
