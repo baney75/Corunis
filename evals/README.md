@@ -28,6 +28,11 @@ reads it. It is run only for the final win check, one group at a time, with
 holds each file's SHA-256, so a changed question shows: run `sha256sum -c` on that file from the
 held-out folder before the check.
 
+The corpora have few disagreements and superseded facts, so held-out conflicting questions in
+family, parish and business, and some stale and conflicting ones in class, use document pairs the
+tuning set also uses. Each asks something the tuning set does not. Report held-out scores on those
+two kinds as such, and don't tune on facts from those pairs.
+
 ### Corpus conventions
 
 - DOCX and PDF files are written as text (`name.docx.src`, `name.pdf.src`) and converted when the
