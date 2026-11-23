@@ -4,7 +4,7 @@ Instructions for AI coding agents (Claude Code, Codex, Cursor and others) workin
 
 ## What this project is
 
-A fully local, private and secure organizational brain for universities. It helps with grants, student management and institutional knowledge, and it is easy to extend, back up and integrate with existing campus systems.
+A fully local, private and secure organizational brain for any group (a family, a parish, a small business, a class, a team, a university). v0 is a Local Studio plugin; see docs/SPEC.md. It helps with grants, student management and institutional knowledge, and it is easy to extend, back up and integrate with existing campus systems.
 
 ## Ground rules
 
@@ -42,14 +42,14 @@ Never claim the software can do something without a passing test. Follow `TESTIN
 
 ## Releases
 
-Corunis ships on two channels, Stable and Dev (no nightly). See `RELEASES.md`. Never push directly to `stable`.
+Corunis ships on three channels, stable, nightly and dev, on the Local Studio family scheme. See `RELEASES.md`. Never push directly to `stable`.
 
 ## Repository layout
 
 - `AGENTS.md`: this file
 - `CLAUDE.md`: Claude Code entry point, points here
 - `DESIGN.md`: design system and UX rules, owned by the designer
-- `RELEASES.md`: Stable and Dev channels
+- `RELEASES.md`: stable, nightly and dev channels
 - `CONTRIBUTING.md`: how to contribute, including design work and coauthorship
 - `TESTING.md`, `SUPPORTED.md`, `BENCHMARKS.md`: accuracy, honest scope and model benchmarks
 - `skills/maintainer/`, `skills/runtime/`: original, tested skills
