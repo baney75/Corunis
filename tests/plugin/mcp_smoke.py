@@ -22,6 +22,7 @@ class Client:
     def __init__(self, home: Path) -> None:
         env = {k: v for k, v in os.environ.items() if k not in ("CORUNIS_BRAIN", "CORUNIS_SESSION")}
         env["CORUNIS_HOME"] = str(home)
+        env["LOCAL_STUDIO_CALLER"] = "local:smoke"  # what Local Studio sets for a thread on the host
         self.process = subprocess.Popen(
             [sys.executable, str(ROOT / "bin" / "corunis-mcp")],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,

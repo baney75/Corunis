@@ -209,7 +209,7 @@ class Session:
         self.home = (home or default_home()).expanduser()
         self.brain: Brain | None = None
         self.index: Index | None = None
-        self.member: str | None = None  # set per call from identity.calling_session
+        self.member: str | None = None  # the session's caller, set per call from identity.calling_session
         start = brain_path or self._remembered()
         if start is not None:
             try:
@@ -272,10 +272,11 @@ class Session:
         return caller(brain, self.member, as_role)
 
     def reading(self, as_role: str | None = None) -> tuple[Brain, Index, Caller]:
-        """For every read tool: catch up with moved, linked and changed files, then decide the view."""
+        """For every read tool: decide the view, then catch up with moved, linked and changed files."""
         brain, index = self.need()
+        who = self.who(brain, as_role)  # a refused caller drives no sync
         sync(brain, index)
-        return brain, index, self.who(brain, as_role)
+        return brain, index, who
 
     def admin(self) -> tuple[Brain, Index, Caller]:
         brain, index = self.need()
@@ -478,7 +479,7 @@ class Session:
 
     def tool_brain_new(self, name: str, path: str | None = None) -> dict:
         root = Path(path).expanduser() if path else self.home / brainlib.folder_name(name)
-        brainlib.create(root, str(name).strip())
+        brainlib.create(root, str(name).strip(), self.member or "")
         self._open(root)
         self._remember_current()
         return {
@@ -492,6 +493,7 @@ class Session:
         candidate = Path(brain).expanduser()
         if not (candidate / brainlib.CONFIG).is_file():
             candidate = self.home / brainlib.folder_name(brain)
+        self.who(brainlib.load(Path(os.path.realpath(candidate.expanduser()))))  # refuse before switching brains
         self._open(candidate)
         self._remember_current()
         return self.tool_status()

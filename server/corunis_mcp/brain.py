@@ -62,6 +62,7 @@ class Brain:
     keeper: str
     roles: dict[str, list[str]]
     members: dict[str, Member]
+    keeper_caller: str = ""  # Local Studio's caller id of the session that made the brain
 
     @property
     def spaces_dir(self) -> Path:
@@ -115,6 +116,7 @@ class Brain:
             "# Corunis brain. Corunis writes this file through chat; you can also edit it by hand.",
             f"name = {_q(self.name)}",
             f"keeper = {_q(self.keeper)}",
+            f"keeper_caller = {_q(self.keeper_caller)}",
             "",
         ]
         for role in sorted(self.roles):
@@ -158,10 +160,12 @@ def load(root: Path) -> Brain:
         members[member_id] = Member(member_id, str(table.get("name", "")), member_roles)
     keeper = str(data.get("keeper") or "keeper")
     members.setdefault(keeper, Member(keeper, "Keeper", []))
-    return Brain(root=root, name=str(data.get("name") or root.name), keeper=keeper, roles=roles, members=members)
+    keeper_caller = data.get("keeper_caller")
+    return Brain(root=root, name=str(data.get("name") or root.name), keeper=keeper, roles=roles, members=members,
+                 keeper_caller=keeper_caller if isinstance(keeper_caller, str) else "")
 
 
-def create(root: Path, name: str) -> Brain:
+def create(root: Path, name: str, keeper_caller: str) -> Brain:
     if (root / CONFIG).exists():
         raise BrainError(f"A brain already exists at {root}.")
     for space in (DEFAULT_SPACE, KEEPER_SPACE):
@@ -173,6 +177,7 @@ def create(root: Path, name: str) -> Brain:
         keeper="keeper",
         roles={DEFAULT_ROLE: [DEFAULT_SPACE]},
         members={"keeper": Member("keeper", "Keeper", [])},
+        keeper_caller=keeper_caller,
     )
     brain.save()
     return brain

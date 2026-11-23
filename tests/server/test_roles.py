@@ -174,28 +174,26 @@ def test_role_change_in_brain_toml_applies_at_the_next_call(parish):
 
 
 ALL_TOOLS = [tool["name"] for tool in tools.TOOLS]
-REFUSE_WAYS = ["remote_serving", "meta_caller_claims_keeper", "meta_remote", "env", "check_fails"]
+REFUSE_WAYS = ["device", "missing", "empty_local", "other_local", "meta_caller_claims_keeper", "meta_remote", "env"]
 
 
 @pytest.mark.parametrize("way", REFUSE_WAYS)
 def test_non_keeper_caller_is_refused_by_every_tool(parish, monkeypatch, way):
     meta = None
-    if way == "remote_serving":
-        monkeypatch.setattr(identity, "remote_serving", lambda: True)
+    if way == "device":
+        monkeypatch.setenv("LOCAL_STUDIO_CALLER", "device:phone-1")  # a Remote session from a paired device
+    elif way == "missing":
+        monkeypatch.delenv("LOCAL_STUDIO_CALLER")
+    elif way == "empty_local":
+        monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:")
+    elif way == "other_local":
+        monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:2000")  # a host session, but not this brain's keeper
     elif way == "meta_caller_claims_keeper":
         meta = {"caller": {"member": "keeper", "origin": "host"}}  # a claim is not trusted until the core signs it
     elif way == "meta_remote":
         meta = {"remote": True}
     elif way == "env":
         monkeypatch.setenv("CORUNIS_SESSION", "remote")
-    else:
-        monkeypatch.undo()
-        monkeypatch.delenv("CORUNIS_SESSION", raising=False)
-
-        def broken():
-            raise OSError("no process list")
-
-        monkeypatch.setattr(identity, "process_commands", broken)
     pid = parish.index.db.execute("SELECT pid FROM passages WHERE space = 'everyone' LIMIT 1").fetchone()[0]
     args = {
         "search": {"question": "Saturday vigil Mass"}, "open": {"passage_id": pid},
@@ -206,7 +204,10 @@ def test_non_keeper_caller_is_refused_by_every_tool(parish, monkeypatch, way):
     }
     assert set(args) == set(ALL_TOOLS)
     toml_before = (parish.brain.root / "brain.toml").read_text()
-    for name in ALL_TOOLS:
+    monkeypatch.setattr(tools, "sync", lambda *a: pytest.fail("a refused caller drove a sync"))
+    # Another host user may make a brain of their own; every tool on this brain still refuses them.
+    names = [n for n in ALL_TOOLS if not (way == "other_local" and n == "brain_new")]
+    for name in names:
         with pytest.raises(identity.NotServed) as refused:
             parish.call(name, args[name], meta)
         assert str(refused.value).startswith(identity.REFUSED)
@@ -214,14 +215,44 @@ def test_non_keeper_caller_is_refused_by_every_tool(parish, monkeypatch, way):
     assert not list(parish.brain.spaces_dir.rglob("notes"))
 
 
-def test_remote_serving_detects_the_serve_process(monkeypatch):
-    monkeypatch.undo()
-    monkeypatch.setattr(identity, "process_commands", lambda: [["/usr/bin/bash"], ["/opt/local-studio", "--smoke"]])
-    assert identity.remote_serving() is False
-    monkeypatch.setattr(identity, "process_commands", lambda: [["/opt/ls/local-studio", "serve", "--port", "18093"]])
-    assert identity.remote_serving() is True
-    monkeypatch.setattr(identity, "process_commands", lambda: [["local-studio-controller", "serve"]])
-    assert identity.remote_serving() is False
+def test_a_new_brain_records_its_keepers_caller(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:501")
+    session = tools.Session(home=tmp_path / "home")
+    session.call("brain_new", {"name": "Choir"})
+    assert 'keeper_caller = "local:501"' in (session.brain.root / "brain.toml").read_text()
+    assert session.call("status", {})["brain"] == "Choir"
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:502")
+    with pytest.raises(identity.NotServed) as refused:
+        session.call("status", {})
+    assert "not the keeper" in str(refused.value)
+    session.close()
+
+
+def test_a_brain_with_no_keeper_caller_serves_no_one(parish):
+    toml = parish.brain.root / "brain.toml"
+    toml.write_text(toml.read_text().replace('keeper_caller = "local:1000"\n', ""), encoding="utf-8")
+    with pytest.raises(identity.NotServed) as refused:
+        parish.call("status", {})
+    assert "records no keeper caller" in str(refused.value)
+    assert 'set keeper_caller = "local:1000" in ' + str(toml) in str(refused.value)  # how to claim it in place
+    toml.write_text(toml.read_text().replace("[", 'keeper_caller = "local:1000"\n[', 1), encoding="utf-8")
+    assert parish.call("status", {})["brain"] == parish.brain.name
+
+
+def test_a_refused_caller_cannot_switch_the_open_brain(parish, monkeypatch, tmp_path):
+    other = tmp_path / "other"
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:2000")
+    tools.Session(home=tmp_path / "home2").call("brain_new", {"name": "Other", "path": str(other)})
+    current = parish.home / ".current"
+    before = current.read_text() if current.exists() else None
+    with pytest.raises(identity.NotServed) as refused:
+        parish.call("brain_open", {"brain": str(parish.brain.root)})
+    assert 'set keeper_caller = "local:2000"' in str(refused.value)  # names this session's caller, for a moved brain
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:1000")
+    with pytest.raises(identity.NotServed):
+        parish.call("brain_open", {"brain": str(other)})
+    assert parish.brain.root != other.resolve()
+    assert (current.read_text() if current.exists() else None) == before
 
 
 def test_ask_as_can_only_lower(parish):

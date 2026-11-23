@@ -8,12 +8,13 @@ python="${PYTHON:-python3}"
 "$python" - <<'PY'
 import pathlib, re, sys, tomllib
 m = tomllib.loads(pathlib.Path("plugin.toml").read_text())
-allowed = {"id", "version", "description", "skills", "prompts", "commands", "capabilities", "mcp"}
+allowed = {"id", "version", "description", "skills", "prompts", "commands", "capabilities", "local_only", "mcp"}
 assert set(m) <= allowed, f"unknown keys: {set(m) - allowed}"
 assert m["id"] == "corunis", m["id"]
 assert re.fullmatch(r"\d+\.\d+\.\d+", m["version"]), m["version"]
 assert m["description"].strip()
 assert m["capabilities"] == ["mcp-server"], m["capabilities"]
+assert m.get("local_only") is True, "corunis must declare local_only = true"
 mcp = m["mcp"]
 assert set(mcp) <= {"command", "args", "env"}, mcp
 command = pathlib.Path(mcp["command"])

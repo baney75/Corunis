@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from corunis_mcp import identity  # noqa: E402
 from corunis_mcp.tools import Session  # noqa: E402
-from parish import write_parish  # noqa: E402
+from parish import KEEPER_CALLER, write_parish  # noqa: E402
 
 
 class Client:
@@ -40,8 +40,8 @@ class Client:
 
 @pytest.fixture(autouse=True)
 def on_host(monkeypatch):
-    """Every test runs as the keeper's host session with Remote off, unless it patches this again."""
-    monkeypatch.setattr(identity, "remote_serving", lambda: False)
+    """Every test runs as the keeper's host session (Local Studio's caller for the parish brain's keeper)."""
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", KEEPER_CALLER)
     monkeypatch.delenv("CORUNIS_SESSION", raising=False)
 
 

@@ -19,8 +19,11 @@ FIXED_TIME = 1_790_000_000  # 2026-09-21, so two copies of the brain have identi
 ROLES = {"member": ["everyone"], "council": ["council", "everyone"], "staff": ["everyone", "staff"]}
 SPACES = ["council", "everyone", "staff"]
 
+KEEPER_CALLER = "local:1000"
+
 BRAIN_TOML = """name = "St. Brigid Parish"
 keeper = "keeper"
+keeper_caller = "local:1000"
 
 [roles.member]
 spaces = ["everyone"]
