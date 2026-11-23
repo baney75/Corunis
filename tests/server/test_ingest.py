@@ -12,7 +12,7 @@ import pytest
 from corunis_mcp import extract
 from corunis_mcp.extract import Unit
 from corunis_mcp.passages import MAX_WORDS, MIN_WORDS, split
-from parish import FILES, FIXED_TIME
+from parish import FILES, FIXED_TIME, KEEPER_CALLER
 
 
 def texts_of(parish, document: str) -> list[str]:
@@ -128,6 +128,7 @@ def test_unreadable_or_vanished_file_is_reported_and_tools_still_work(parish, mo
     unread = {u["file"]: u["reason"] for u in parish.tool_status()["unread_files"]}
     assert "PermissionError" in unread["spaces/everyone/locked.txt"] and "spaces/everyone/gone.txt" not in unread
     monkeypatch.undo()
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", KEEPER_CALLER)  # undo also dropped the keeper's caller
     parish.tool_search("When is the vigil Mass")  # readable again, same mtime: the next call reads it
     assert doc_error(parish, "spaces/everyone/locked.txt") is None
 
