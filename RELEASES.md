@@ -13,9 +13,10 @@ Corunis ships as a Local Studio plugin from a git tree, so each channel is a git
 ## How a change reaches users
 
 1. Work merges into `main` by pull request with CI green. That is dev.
-2. Each day `main` becomes nightly when CI and the tier evals in TESTING.md pass and no open issue is labeled `regression` and `blocks-nightly`.
-3. A nightly is promoted to stable after 72 hours on nightly with no open regression, every TESTING.md check passing for every supported model, and plain release notes. `stable` fast-forwards to it and it is tagged `vX.Y.Z`.
-4. Hotfixes go to `stable` by pull request with a check that fails before the fix, then merge back into `main` the same day.
+2. No nightly or stable ships until the plugin declares `local_only` and the core provides the per-session sandbox (local-studio#33) and encrypted plugin storage (local-studio#7), and Fonsviva reports where each job ran (Fonsviva#3); until then `main` is a dev build (docs/SPEC.md, "What runs locally").
+3. Each day `main` becomes nightly when CI and the tier evals in [docs/SPEC.md](docs/SPEC.md#evals) pass and no open issue is labeled `regression` and `blocks-nightly`.
+4. A nightly is promoted to stable after 72 hours on nightly with no open regression, every TESTING.md check passing for every supported model, and plain release notes. `stable` fast-forwards to it and it is tagged `vX.Y.Z`.
+5. Hotfixes go to `stable` by pull request with a check that fails before the fix, then merge back into `main` the same day.
 
 ## Update rules
 

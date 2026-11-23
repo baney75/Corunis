@@ -58,12 +58,9 @@ Spaces are plain folders, so the keeper manages access by dragging files, and ba
 
 ### Members and roles
 
-The brain lives on one host machine: the keeper's desktop, or a small always-on box. Later, members reach it through Local Studio Remote (the phone protocol, local-studio PR #4) from the iPhone app or another desktop, which keeps one place that enforces roles, something a synced folder on every member's machine cannot do.
+The brain lives on one host machine: the keeper's desktop, or a small always-on box. Later, members reach it through Local Studio Remote (the phone protocol, local-studio docs/remote.md) from the iPhone app or another desktop, which keeps one place that enforces roles, something a synced folder on every member's machine cannot do.
 
-v0 is the keeper alone. A Remote session runs on the host with the session's tools, including bash, so it could read the brain folder directly; no plugin can close that. Member access ships only when the core provides both of these, and until then every Corunis tool refuses to serve a member:
-
-1. a caller identity the core signs (issue #8), including whether the session is local to the host or Remote;
-2. member sessions that the core limits to Corunis's own tools, with no bash, file or web tools (added to issue #8).
+v0 is the keeper alone. The core now names the caller: each session's server gets `LOCAL_STUDIO_CALLER`, `local:<uid>` for a thread started on the host and `device:<id>` for one a paired device started through Remote, set by the core and never by the model (local-studio docs/plugins.md, "Caller identity"). `corunis-mcp` serves only the keeper's `local:<uid>` (recorded in `brain.toml` when the brain is made) and refuses a `device:` caller, any other caller and a missing one. A Remote session still runs on the host with the session's tools, including bash, so it could read the brain folder directly; no plugin can close that. Member access ships only when the core also provides member sessions limited to Corunis's own tools, with no bash, file or web tools (local-studio#3), and the per-session sandbox (local-studio#33).
 
 Rules that hold from v0 on, enforced in `corunis-mcp`, not in the skill:
 
@@ -75,21 +72,22 @@ Rules that hold from v0 on, enforced in `corunis-mcp`, not in the skill:
 
 ## Capabilities it asks for
 
-`mcp-server` only.
+`mcp-server`, and the manifest sets `local_only = true`: on a cloud model Local Studio does not send a `/brain` command and keeps a thread that ran one local (local-studio docs/plugins.md, "Local-only plugins").
 
-What the plugin API lacks, filed as issues on baney75/local-studio:
+What the plugin API still lacks, filed on baney75/local-studio:
 
-1. **Caller identity and member sessions**: the MCP server needs the member identity of the session that calls it, signed by the core, including whether it is local or Remote; and member sessions limited to the plugin's own tools.
-2. **`local_only`**, the same ask as UntoCaesar: refuse to run the plugin in a session whose provider is not local, and turn off web tools in that session.
-3. **Background work**: a way for the MCP server to post progress into chat while ingest runs.
+1. **Member sessions** limited to the plugin's own tools (local-studio#3).
+2. **Per-session no-network sandbox** for the model's tools (local-studio#33).
+3. **Encrypted plugin storage** with the key in the OS keychain (local-studio#7), for the brain folder and its index (AGENTS.md: user data is encrypted at rest).
+4. **Background work and the session tier**: progress in chat while ingest runs, and the tier for the skill (local-studio#4).
 
 ## What runs locally
 
 Everything. The MCP server talks over stdio and opens one other connection at most: a loopback client to Fonsviva's embedding endpoint for tiers M and L, in a single module that refuses any address that is not 127.0.0.1 or ::1. A CI check fails the build if any other module imports a networking library.
 
-Loopback is not enough, because Fonsviva can route a job to a cloud provider. Every embedding call, at ingest and at question time, asks Fonsviva for local hardware only and requires its reply to say where the job ran; a reply that is missing that or names anything but the host stops the ingest or the answer (asked of the Fonsviva lead in an issue on baney75/Fonsviva).
+Loopback is not enough, because Fonsviva can route a job to a cloud provider. Every embedding call, at ingest and at question time, asks Fonsviva for local hardware only and requires its reply to say where the job ran; a reply that is missing that or names anything but the host stops the ingest or the answer (baney75/Fonsviva#3).
 
-A skill cannot stop a session on a cloud model: by the time it runs, the question has already reached that provider. So Corunis cannot keep its no-cloud promise until the core's `local_only` (issue #7) lands. Until then it ships on the dev channel only, never nightly or stable, and the catalog listing says it does not yet block cloud sessions.
+`local_only` keeps questions off cloud models. Until the sandbox (local-studio#33) and encrypted storage (local-studio#7) also land, and Fonsviva reports where each job ran (Fonsviva#3), Corunis ships on the dev channel only, never nightly or stable, and the catalog listing says so.
 
 ## Evals
 
