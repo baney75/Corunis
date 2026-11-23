@@ -23,7 +23,7 @@ import urllib.request
 from corunis_evals import EVALS
 
 PROMPT = EVALS / "judges" / "correctness.md"
-BRACKET = re.compile(r"\s*\[[^\[\]]*\]")
+BRACKET = re.compile(r"\s*\[(?:p[0-9a-f]{6,}|derived)[^\[\]]*\]")  # citations only; other brackets may hold the claim
 STOP_WORDS = ("quota", "billing", "usage limit", "rate limit", "credit balance", "payment required", "upgrade")
 MAX_LOAD = 6.0
 

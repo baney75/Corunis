@@ -76,7 +76,8 @@ def load(paths: list[Path]) -> list[dict]:
     return records
 
 
-def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -> dict[str, dict]:
+def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -> tuple[dict[str, dict], list[str]]:
+    """Verdicts for the first `limit` answerable records (all when None), and those records' ids."""
     key = f"{judge.name}:{getattr(judge, 'model', '')}"
     cache: dict[str, dict] = {}
     if cache_path.exists():
@@ -85,9 +86,8 @@ def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -
                 item = json.loads(line)
                 if item["judge"] == key:
                     cache[item["id"]] = item
-    todo = [r for r in records if r["kind"] in ANSWERABLE and not abstained(r) and (r.get("answer") or "").strip()]
-    if limit is not None:
-        todo = todo[:limit]
+    pool = [r for r in records if r["kind"] in ANSWERABLE][:limit]
+    todo = [r for r in pool if not abstained(r) and (r.get("answer") or "").strip()]
     with cache_path.open("a", encoding="utf-8") as sink:
         for n, record in enumerate(todo, 1):
             if record["id"] in cache:
@@ -105,14 +105,14 @@ def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -
             sink.write(json.dumps(item) + "\n")
             sink.flush()
             print(f"  judged {n}/{len(todo)} {record['id']}: {found['correct']}", file=sys.stderr)
-    return {i: cache[i] for i in (r["id"] for r in todo) if i in cache}
+    return {i: cache[i] for i in (r["id"] for r in todo) if i in cache}, [r["id"] for r in pool]
 
 
 def ratio(hits: int, total: int) -> float | None:
     return hits / total if total else None
 
 
-def score(records: list[dict], verdicts: dict[str, dict] | None) -> dict:
+def score(records: list[dict], verdicts: dict[str, dict] | None, pool: list[str] | None = None) -> dict:
     answerable = [r for r in records if r["kind"] in ANSWERABLE]
     abstain = [r for r in records if r["kind"] in ABSTAIN]
     good_cites = all_cites = gold_hit = gold_total = 0
@@ -138,7 +138,9 @@ def score(records: list[dict], verdicts: dict[str, dict] | None) -> dict:
     out["leaks"] = (sum(len(v) for v in leaked.values()), f"{len(leaked)} questions")
     out["leaked"] = leaked
     if verdicts is not None:
-        judged = [r for r in answerable if r["id"] in verdicts or abstained(r) or not (r.get("answer") or "").strip()]
+        pool = set(pool) if pool is not None else {r["id"] for r in answerable}
+        judged = [r for r in answerable if r["id"] in pool
+                  and (r["id"] in verdicts or abstained(r) or not (r.get("answer") or "").strip())]
         right = sum(1 for r in judged if r["id"] in verdicts and verdicts[r["id"]]["correct"])
         out["correct"] = (ratio(right, len(judged)), f"{right}/{len(judged)} judged")
         kinds = defaultdict(lambda: [0, 0])
@@ -190,13 +192,13 @@ def main() -> int:
     parser.add_argument("--judge-model", help="claude: a model alias (default haiku); openai: the model name")
     parser.add_argument("--judge-base-url", help="openai judge: OpenAI compatible base URL")
     parser.add_argument("--judge-api-key-env", help="openai judge: environment variable with the key, if needed")
-    parser.add_argument("--judge-limit", type=int, help="judge only the first N answerable records")
+    parser.add_argument("--judge-limit", type=int, help="score correctness on the first N answerable records only")
     parser.add_argument("--tier", choices=TIERS, help="mark each measure pass or FAIL against this tier's bar")
     parser.add_argument("--json", type=Path, help="also write the scores as JSON here")
     args = parser.parse_args()
 
     records = load(args.runs)
-    verdicts = None
+    verdicts = pool = None
     if args.judge != "none":
         if args.judge == "claude":
             judge = judges.ClaudeJudge(args.judge_model or "haiku")
@@ -204,8 +206,8 @@ def main() -> int:
             if not (args.judge_base_url and args.judge_model):
                 parser.error("the openai judge needs --judge-base-url and --judge-model")
             judge = judges.OpenAIJudge(args.judge_base_url, args.judge_model, args.judge_api_key_env)
-        verdicts = judge_all(records, judge, args.runs[0].with_suffix(".judged.jsonl"), args.judge_limit)
-    result = score(records, verdicts)
+        verdicts, pool = judge_all(records, judge, args.runs[0].with_suffix(".judged.jsonl"), args.judge_limit)
+    result = score(records, verdicts, pool)
     runs = sorted({(r["run"]["group"], r["run"]["model"], r["run"]["card"]) for r in records})
     for group, model, card in runs:
         print(f"group {group}, model {model}, card {card}")
