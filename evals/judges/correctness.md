@@ -16,9 +16,10 @@ Gold passages (what the documents say):
 Answer to grade (citation brackets removed):
 {answer}
 
-Wording may differ from the gold answer. An answer that states a fact the gold passages
-contradict is incorrect, even if it also states the right one. An answer that says the
-documents do not answer the question is incorrect.
+Wording may differ from the gold answer. The rule for this kind of question comes first. Beyond
+what that rule allows, an answer that states a fact the gold answer contradicts is incorrect, even
+if it also states the right one. An answer that says the documents do not answer the question is
+incorrect.
 
 Reply with one line of JSON and nothing else:
 {{"correct": true or false, "reason": "one short sentence"}}

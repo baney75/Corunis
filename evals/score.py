@@ -8,20 +8,23 @@
 Measures:
 
     correct            answerable questions the judge marks correct; an abstention is wrong without a judge call
-    citation precision cited passages that are gold (or acceptable, the older source of a stale question)
+    citation precision cited passages that are gold (or acceptable, the older source of a stale question);
+                       a citation on an unanswerable or restricted question is never gold
     citation recall    gold locators with at least one of their passages cited
-    abstains           unanswerable and restricted questions answered with the abstention sentence and no citation
+    abstains           unanswerable and restricted questions answered with the abstention sentence alone
     false abstention   answerable questions answered that way
     leaks              restricted strings (corpus list, file names, titles) for a space the asker cannot read,
                        found in the answer or in what the server returned; any leak fails every tier
 
-Verdicts are kept in <run>.judged.jsonl, keyed by question id, judge and judge model, so a rerun
-judges only what is new.
+Verdicts are kept in <run>.judged.jsonl, keyed by the judge, its model and the whole grading input,
+so a rerun judges only what is new and a changed answer is judged again. While any answer the judge
+should have graded has no verdict, correctness is incomplete: it shows n/a and the exit code is 1.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -45,7 +48,7 @@ TIERS = ("S", "M", "L")
 
 def abstained(record: dict) -> bool:
     sentences = answerlib.sentences(record.get("answer") or "")
-    return not record.get("cited") and any(answerlib.is_abstention(s) for s in sentences)
+    return not record.get("cited") and bool(sentences) and all(answerlib.is_abstention(s) for s in sentences)
 
 
 def served(call: dict):
@@ -73,7 +76,20 @@ def load(paths: list[Path]) -> list[dict]:
     records = []
     for path in paths:
         records += [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    seen: set[str] = set()
+    for r in records:
+        if r["id"] in seen:
+            raise SystemExit(f"question {r['id']} is in more than one record; score each run on its own")
+        seen.add(r["id"])
     return records
+
+
+def needs_judge(record: dict) -> bool:
+    return not abstained(record) and bool((record.get("answer") or "").strip())
+
+
+def fingerprint(key: str, record: dict) -> str:
+    return hashlib.sha256((key + "\0" + judges.prompt_for(record)).encode("utf-8")).hexdigest()
 
 
 def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -> tuple[dict[str, dict], list[str]]:
@@ -84,13 +100,14 @@ def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -
         for line in cache_path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 item = json.loads(line)
-                if item["judge"] == key:
-                    cache[item["id"]] = item
+                if item.get("fingerprint"):
+                    cache[item["fingerprint"]] = item
     pool = [r for r in records if r["kind"] in ANSWERABLE][:limit]
-    todo = [r for r in pool if not abstained(r) and (r.get("answer") or "").strip()]
+    todo = [r for r in pool if needs_judge(r)]
+    prints = {r["id"]: fingerprint(key, r) for r in todo}
     with cache_path.open("a", encoding="utf-8") as sink:
         for n, record in enumerate(todo, 1):
-            if record["id"] in cache:
+            if prints[record["id"]] in cache:
                 continue
             try:
                 found = judge(record)
@@ -100,12 +117,12 @@ def judge_all(records: list[dict], judge, cache_path: Path, limit: int | None) -
             except Exception as error:
                 print(f"judge failed on {record['id']}: {error}", file=sys.stderr)
                 continue
-            item = {"id": record["id"], "judge": key, **found}
-            cache[record["id"]] = item
+            item = {"id": record["id"], "judge": key, "fingerprint": prints[record["id"]], **found}
+            cache[prints[record["id"]]] = item
             sink.write(json.dumps(item) + "\n")
             sink.flush()
             print(f"  judged {n}/{len(todo)} {record['id']}: {found['correct']}", file=sys.stderr)
-    return {i: cache[i] for i in (r["id"] for r in todo) if i in cache}, [r["id"] for r in pool]
+    return {i: cache[f] for i, f in prints.items() if f in cache}, [r["id"] for r in pool]
 
 
 def ratio(hits: int, total: int) -> float | None:
@@ -116,6 +133,8 @@ def score(records: list[dict], verdicts: dict[str, dict] | None, pool: list[str]
     answerable = [r for r in records if r["kind"] in ANSWERABLE]
     abstain = [r for r in records if r["kind"] in ABSTAIN]
     good_cites = all_cites = gold_hit = gold_total = 0
+    for r in abstain:
+        all_cites += len(r.get("cited", []))
     for r in answerable:
         allowed = {i for g in r["gold"] + r["acceptable"] for i in g["ids"]}
         all_cites += len(r.get("cited", []))
@@ -139,10 +158,14 @@ def score(records: list[dict], verdicts: dict[str, dict] | None, pool: list[str]
     out["leaked"] = leaked
     if verdicts is not None:
         pool = set(pool) if pool is not None else {r["id"] for r in answerable}
-        judged = [r for r in answerable if r["id"] in pool
-                  and (r["id"] in verdicts or abstained(r) or not (r.get("answer") or "").strip())]
+        judged = [r for r in answerable if r["id"] in pool]
         right = sum(1 for r in judged if r["id"] in verdicts and verdicts[r["id"]]["correct"])
-        out["correct"] = (ratio(right, len(judged)), f"{right}/{len(judged)} judged")
+        missing = sum(1 for r in judged if needs_judge(r) and r["id"] not in verdicts)
+        out["unjudged"] = missing
+        if missing:
+            out["correct"] = (None, f"incomplete: {missing} of {len(judged)} not judged")
+        else:
+            out["correct"] = (ratio(right, len(judged)), f"{right}/{len(judged)} judged")
         kinds = defaultdict(lambda: [0, 0])
         for r in judged:
             kinds[r["kind"]][1] += 1
@@ -221,6 +244,9 @@ def main() -> int:
         print(f"LEAK {qid}: {found}")
     if args.json:
         args.json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    if result.get("unjudged"):
+        print(f"\nINCOMPLETE: {result['unjudged']} answers have no verdict; rerun to judge them", file=sys.stderr)
+        return 1
     return 0
 
 

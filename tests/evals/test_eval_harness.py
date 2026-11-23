@@ -112,3 +112,88 @@ def test_score_counts_a_leak_and_an_abstention(tmp_path):
     result = score.score(score.load([path]), None)
     assert result["leaked"] == {"class-restricted-04": ["71 percent"]}  # the echoed search term is not a leak
     assert result["abstains"][1] == "1/2"
+
+
+def answered(qid: str, kind: str, answer: str, cited: list[str] | None = None) -> dict:
+    gold = [{"file": "spaces/x.md", "texts": ["The fee is 85 dollars."], "ids": ["p0000000000000001"]}]
+    return {"id": qid, "kind": kind, "question": "What is the fee?", "gold_answer": "85 dollars", "as_role": None,
+            "gold": gold if kind != "unanswerable" else [], "acceptable": [], "restricted": [], "answer": answer,
+            "cited": cited or [], "tool_calls": [], "run": {"group": "class", "model": "m", "card": "M"}}
+
+
+class Counting:
+    name, model = "fake", "f1"
+
+    def __init__(self, fail: set[str] = frozenset()):
+        self.seen, self.fail = [], fail
+
+    def __call__(self, record):
+        self.seen.append(record["answer"])
+        if record["id"] in self.fail:
+            raise ValueError("no verdict")
+        return {"correct": "85" in record["answer"], "reason": ""}
+
+
+def scorer():
+    sys.path.insert(0, str(REPO / "evals"))
+    import score
+
+    return score
+
+
+def test_a_changed_answer_is_judged_again(tmp_path):
+    score, cache = scorer(), tmp_path / "r.judged.jsonl"
+    judge = Counting()
+    verdicts, _ = score.judge_all([answered("a", "single", "The fee is 85 dollars.")], judge, cache, None)
+    assert verdicts["a"]["correct"] is True
+    verdicts, _ = score.judge_all([answered("a", "single", "The fee is 90 dollars.")], judge, cache, None)
+    assert verdicts["a"]["correct"] is False and len(judge.seen) == 2
+    score.judge_all([answered("a", "single", "The fee is 90 dollars.")], judge, cache, None)
+    assert len(judge.seen) == 2  # same input: the kept verdict is reused
+
+
+def test_a_failed_judgment_leaves_correctness_incomplete(tmp_path):
+    score = scorer()
+    records = [answered("a", "single", "The fee is 85 dollars."), answered("b", "single", "The fee is 90 dollars.")]
+    verdicts, pool = score.judge_all(records, Counting(fail={"b"}), tmp_path / "r.judged.jsonl", None)
+    result = score.score(records, verdicts, pool)
+    assert result["correct"][0] is None and result["unjudged"] == 1, result["correct"]
+    assert score.meets("correct", result["correct"][0], "M") == ""
+
+
+def test_score_exits_1_while_judging_is_incomplete(tmp_path):
+    run = tmp_path / "r.jsonl"
+    run.write_text(json.dumps(answered("a", "single", "The fee is 85 dollars.")) + "\n", encoding="utf-8")
+    done = subprocess.run([sys.executable, str(REPO / "evals" / "score.py"), str(run), "--judge", "openai",
+                           "--judge-base-url", "http://127.0.0.1:9/v1", "--judge-model", "none"],
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode == 1 and "INCOMPLETE" in done.stderr, done.stderr
+
+
+def test_the_same_question_in_two_records_is_refused(tmp_path):
+    run = tmp_path / "r.jsonl"
+    run.write_text(json.dumps(answered("a", "single", "x")) + "\n" + json.dumps(answered("a", "single", "y")) + "\n",
+                   encoding="utf-8")
+    with pytest.raises(SystemExit, match="more than one record"):
+        scorer().load([run])
+
+
+def test_an_abstention_with_a_claim_after_it_is_not_an_abstention():
+    score = scorer()
+    assert score.abstained(answered("u", "unanswerable", NO_ANSWER))
+    assert not score.abstained(answered("u", "unanswerable", NO_ANSWER + " The shop sells skateboards."))
+
+
+def test_citations_on_abstain_questions_count_against_precision():
+    score = scorer()
+    records = [answered("a", "single", "The fee is 85 dollars.", ["p0000000000000001"]),
+               answered("u", "unanswerable", "It is 12.", ["p00000000000000ff"])]
+    assert score.score(records, None)["citation precision"][1] == "1/2 cited"
+
+
+def test_the_judge_prompt_lets_the_kind_rule_govern():
+    from corunis_evals import judges
+
+    prompt = judges.prompt_for(answered("c", "conflicting", "The minutes say 85 and the quote says 90."))
+    assert "gold passages\ncontradict" not in prompt and "the gold passages contradict" not in prompt
+    assert "rule for this kind of question comes first" in prompt

@@ -67,7 +67,9 @@ reply.
 `score.py` reports correctness (blind judge with the gold answer and gold passages; an abstention
 on an answerable question counts as wrong without a judge call), citation precision and recall at
 passage level, abstention on unanswerable and restricted questions, false abstention on answerable
-ones, and leaks. Verdicts are cached in `<run>.judged.jsonl`. `--tier` marks each measure pass or
+ones, and leaks. An abstention is the abstention sentence alone, with no citation. Verdicts are
+cached in `<run>.judged.jsonl`, keyed by the whole grading input, so a changed answer is judged
+again. If any answer has no verdict, correctness shows n/a and the exit code is 1. `--tier` marks each measure pass or
 FAIL against that tier's bar. The claude judge waits while the host's 1 minute load is 6 or more.
 
 ## Leak suite
