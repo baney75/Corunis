@@ -272,10 +272,11 @@ class Session:
         return caller(brain, self.member, as_role)
 
     def reading(self, as_role: str | None = None) -> tuple[Brain, Index, Caller]:
-        """For every read tool: catch up with moved, linked and changed files, then decide the view."""
+        """For every read tool: decide the view, then catch up with moved, linked and changed files."""
         brain, index = self.need()
+        who = self.who(brain, as_role)  # a refused caller drives no sync
         sync(brain, index)
-        return brain, index, self.who(brain, as_role)
+        return brain, index, who
 
     def admin(self) -> tuple[Brain, Index, Caller]:
         brain, index = self.need()
@@ -492,6 +493,7 @@ class Session:
         candidate = Path(brain).expanduser()
         if not (candidate / brainlib.CONFIG).is_file():
             candidate = self.home / brainlib.folder_name(brain)
+        self.who(brainlib.load(Path(os.path.realpath(candidate.expanduser()))))  # refuse before switching brains
         self._open(candidate)
         self._remember_current()
         return self.tool_status()

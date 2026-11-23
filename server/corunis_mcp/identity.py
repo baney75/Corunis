@@ -31,8 +31,11 @@ from corunis_mcp.brain import Brain, BrainError
 KEEPER = "keeper"
 REFUSED = "Corunis v0 answers only the keeper, in a session on the brain's own computer."
 NO_CALLER = " Local Studio did not name a caller for this session, so Corunis cannot tell who is asking."
-NOT_KEEPER = " This session's caller is not the keeper this brain was made by."
-NO_KEEPER_CALLER = " This brain records no keeper caller; make it again with brain_new in Local Studio."
+NOT_KEEPER = " This session's caller ({named}) is not the keeper this brain was made by."
+NO_KEEPER_CALLER = " This brain records no keeper caller."
+# A brain made before keeper_caller, or carried to a new computer or account, still belongs to its
+# keeper; the keeper claims it by hand in brain.toml, never by a call.
+CLAIM = " If you are its keeper, set keeper_caller = \"{named}\" in {config} and call again."
 
 
 class NotServed(BrainError):
@@ -75,10 +78,11 @@ def lower(who: Caller, brain: Brain, role: str) -> Caller:
 
 def caller(brain: Brain, member: str, as_role: str | None = None) -> Caller:
     """The view for the session caller that calling_session let through: the keeper's, or NotServed."""
+    claim = CLAIM.format(named=member, config=brain.root / brainlib.CONFIG)
     if not brain.keeper_caller:
-        raise NotServed(REFUSED + NO_KEEPER_CALLER)
+        raise NotServed(REFUSED + NO_KEEPER_CALLER + claim)
     if member != brain.keeper_caller:
-        raise NotServed(REFUSED + NOT_KEEPER)
+        raise NotServed(REFUSED + NOT_KEEPER.format(named=member) + claim)
     who = keeper_view(brain)
     return lower(who, brain, as_role) if as_role else who
 

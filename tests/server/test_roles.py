@@ -204,6 +204,7 @@ def test_non_keeper_caller_is_refused_by_every_tool(parish, monkeypatch, way):
     }
     assert set(args) == set(ALL_TOOLS)
     toml_before = (parish.brain.root / "brain.toml").read_text()
+    monkeypatch.setattr(tools, "sync", lambda *a: pytest.fail("a refused caller drove a sync"))
     # Another host user may make a brain of their own; every tool on this brain still refuses them.
     names = [n for n in ALL_TOOLS if not (way == "other_local" and n == "brain_new")]
     for name in names:
@@ -233,6 +234,25 @@ def test_a_brain_with_no_keeper_caller_serves_no_one(parish):
     with pytest.raises(identity.NotServed) as refused:
         parish.call("status", {})
     assert "records no keeper caller" in str(refused.value)
+    assert 'set keeper_caller = "local:1000" in ' + str(toml) in str(refused.value)  # how to claim it in place
+    toml.write_text(toml.read_text().replace("[", 'keeper_caller = "local:1000"\n[', 1), encoding="utf-8")
+    assert parish.call("status", {})["brain"] == parish.brain.name
+
+
+def test_a_refused_caller_cannot_switch_the_open_brain(parish, monkeypatch, tmp_path):
+    other = tmp_path / "other"
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:2000")
+    tools.Session(home=tmp_path / "home2").call("brain_new", {"name": "Other", "path": str(other)})
+    current = parish.home / ".current"
+    before = current.read_text() if current.exists() else None
+    with pytest.raises(identity.NotServed) as refused:
+        parish.call("brain_open", {"brain": str(parish.brain.root)})
+    assert 'set keeper_caller = "local:2000"' in str(refused.value)  # names this session's caller, for a moved brain
+    monkeypatch.setenv("LOCAL_STUDIO_CALLER", "local:1000")
+    with pytest.raises(identity.NotServed):
+        parish.call("brain_open", {"brain": str(other)})
+    assert parish.brain.root != other.resolve()
+    assert (current.read_text() if current.exists() else None) == before
 
 
 def test_ask_as_can_only_lower(parish):
