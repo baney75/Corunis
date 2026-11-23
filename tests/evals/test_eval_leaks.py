@@ -340,7 +340,6 @@ def test_ask_as_a_higher_role_is_refused(pristine, group):
 CODE = re.compile(r"\d[^\W\d_]|[^\W\d_]\d")  # a word that mixes letters and digits, such as 7KQ2MX
 
 
-@pytest.mark.xfail(strict=True, reason="verify reads 7KQ2MX as the names KQ and MX and drops a cited, true sentence")
 def test_a_cited_code_of_letters_and_digits_is_kept(pristine):
     brain = pristine("class")
     q = next(q for q in brain.questions if q["id"] == "class-single-07")
@@ -393,3 +392,12 @@ def test_uncited_sentence_is_dropped(pristine, group):
         assert len(result["kept"]) == 1 and result["dropped"][0]["reason"] == "It cites no passage.", (q["id"], result)
         assert stated not in result["answer"]
         assert_no_leak(brain, role, result)
+
+
+def test_an_invented_code_is_dropped(pristine):
+    brain = pristine("class")
+    q = next(q for q in brain.questions if q["id"] == "class-single-07")
+    locator = q["gold"][0]
+    pid = brain.resolve(locator)[0]
+    result = brain.call("verify", answer=cite("The class code is 9ZZ1AA", pid, locator["quote"]))
+    assert not result["kept"], result

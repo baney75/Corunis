@@ -135,10 +135,12 @@ def quote_in(quote: str, text: str) -> bool:
 
 
 def names_in(text: str) -> list[str]:
-    """Capitalized words: proper names, months and days."""
+    """Capitalized words (proper names, months and days) and codes, each whole."""
     names: list[str] = []
-    for word in re.findall(r"[^\W\d_]+", text):
-        if word[0].isupper() and word.casefold() not in NOT_NAMES and word not in names:
+    for word in re.findall(r"[^\W_]+", text):
+        code = re.search(r"[^\W\d_].*\d", word)  # a letter before a digit: 7KQ2MX, A1; not 21st or 5pm
+        named = not any(c.isdigit() for c in word) and word[0].isupper() and word.casefold() not in NOT_NAMES
+        if (named or code) and word not in names:
             names.append(word)
     return names
 
