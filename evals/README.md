@@ -20,6 +20,14 @@ The leak suite and the corpus checks live in `tests/evals/`, so CI runs them on 
 There is no held-out question set in this repo. These are tuning questions: tune skill text and
 retrieval on them, and score claims only on a held-out set kept elsewhere.
 
+The held-out set (`heldout-v1`, 24 questions per group, 4 of each kind, over the same corpora)
+lives outside the repo, on chapel1 under `~/.local/state/flagship/studies/corunis/heldout-v1/`.
+A separate writer who does no tuning wrote it, and nobody who tunes the tier cards or retrieval
+reads it. It is run only for the final win check, one group at a time, with
+`evals/run.py --group <group> --questions <path to group.jsonl>`. [`heldout-v1.sha256`](heldout-v1.sha256)
+holds each file's SHA-256, so a changed question shows: run `sha256sum -c` on that file from the
+held-out folder before the check.
+
 ### Corpus conventions
 
 - DOCX and PDF files are written as text (`name.docx.src`, `name.pdf.src`) and converted when the
