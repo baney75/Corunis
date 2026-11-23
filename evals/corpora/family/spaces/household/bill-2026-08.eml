@@ -1,0 +1,12 @@
+From: Prairie Gas <billing@gas.example>
+To: Owen Merriwether <owen.m@mailbox.example>
+Date: Mon, 5 Aug 2026 07:00:00 -0600
+Subject: Your Prairie Gas bill is ready
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Your bill for service at your home is ready.
+
+Amount due: $37.92
+Due date: the 25th of this month.
+Autopay is on.

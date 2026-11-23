@@ -1,0 +1,8 @@
+Work order 10283
+Date: 2026-06-30
+Customer: Corey Vance
+
+Requested: Safety check
+Notes: bought used, wants it checked
+Tech: Odile Brandvold
+Status: picked up

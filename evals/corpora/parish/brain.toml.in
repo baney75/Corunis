@@ -1,0 +1,27 @@
+name = "St. Columba Parish"
+keeper = "keeper"
+keeper_caller = "{{KEEPER_CALLER}}"
+
+[roles.parishioner]
+spaces = ["everyone"]
+
+[roles.council]
+spaces = ["council", "everyone"]
+
+[roles.finance]
+spaces = ["council", "everyone", "finance"]
+
+[roles.staff]
+spaces = ["everyone", "staff"]
+
+[members.keeper]
+name = "Parish Office"
+roles = []
+
+[members.tvance]
+name = "Teodora Vance"
+roles = ["council"]
+
+[members.hmcbride]
+name = "Hollis McBride"
+roles = ["finance"]

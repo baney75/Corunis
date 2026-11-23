@@ -1,0 +1,20 @@
+name = "Earth Science 8, Room 214"
+keeper = "keeper"
+keeper_caller = "{{KEEPER_CALLER}}"
+
+[roles.student]
+spaces = ["everyone"]
+
+[roles.parent]
+spaces = ["everyone", "families"]
+
+[roles.coteacher]
+spaces = ["everyone", "families", "teaching"]
+
+[members.keeper]
+name = "Halvard Dunmore"
+roles = []
+
+[members.ofreeman]
+name = "Odalys Freeman"
+roles = ["coteacher"]

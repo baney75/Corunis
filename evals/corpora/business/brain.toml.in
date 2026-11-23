@@ -1,0 +1,24 @@
+name = "Brightwater Bike Works"
+keeper = "keeper"
+keeper_caller = "{{KEEPER_CALLER}}"
+
+[roles.staff]
+spaces = ["everyone"]
+
+[roles.manager]
+spaces = ["everyone", "management"]
+
+[roles.bookkeeper]
+spaces = ["books", "everyone"]
+
+[members.keeper]
+name = "Tamsin Okoro"
+roles = []
+
+[members.rafa]
+name = "Rafa Quintana"
+roles = ["manager"]
+
+[members.perpetua]
+name = "Perpetua Lindell"
+roles = ["bookkeeper"]

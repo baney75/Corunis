@@ -1,0 +1,9 @@
+Work order 10482
+Date: October 27, 2026
+Customer: Ilsa Novak
+Bike: Kestrel Ridge 29, gray
+
+Requested: Full overhaul plus new chain ($42).
+Notes: creaking from the bottom bracket; customer wants it back by Friday.
+Tech: Wren Takahashi
+Status: waiting on chain
