@@ -16,7 +16,7 @@ from pathlib import Path
 from corunis_mcp import answer as answerlib
 from corunis_mcp import brain as brainlib
 from corunis_mcp import extract
-from corunis_mcp.answer import MIN_QUOTE, NO_ANSWER, clean_quote, normalize, unsupported_facts
+from corunis_mcp.answer import MIN_QUOTE, NO_ANSWER, clean_quote, normalize, quote_in, underived, unsupported_facts
 from corunis_mcp.brain import Brain, BrainError
 from corunis_mcp.identity import Caller, calling_session, caller, require_keeper
 from corunis_mcp.index import Index
@@ -377,9 +377,9 @@ class Session:
         return result
 
     def check_sentence(self, brain: Brain, index: Index, who: Caller, sentence: answerlib.Sentence) -> tuple[str | None, list]:
+        if sentence.bad_brackets:
+            return 'A bracket in it is not in the form [p0123456789abcde "exact words"] or [derived 79,650].', []
         if not sentence.citations:
-            if sentence.bad_brackets:
-                return 'Its citation is not in the form [p0123456789abcde "exact words"].', []
             return "It cites no passage.", []
         sources, quotes = [], []
         for pid, raw_quote in sentence.citations:
@@ -389,7 +389,7 @@ class Session:
                 return NOT_FOUND, []
             if len(quote) < MIN_QUOTE:
                 return f"A quote is shorter than {MIN_QUOTE} characters.", []
-            if quote not in normalize(passage["text"]):
+            if not quote_in(quote, normalize(passage["text"])):
                 return f"The quote {raw_quote!r} is not in passage {pid}.", []
             quotes.append(raw_quote)
             sources.append({"passage_id": pid, "quote": raw_quote, "document": passage["document"],
@@ -397,6 +397,9 @@ class Session:
         missing = unsupported_facts(sentence.text, quotes, sentence.derived)
         if missing:
             return f"It states {', '.join(missing)}, which none of its quotes contain.", []
+        wrong = underived(sentence.derived, quotes)
+        if wrong:
+            return wrong, []
         return None, sources
 
     def tool_status(self, as_role: str | None = None) -> dict:

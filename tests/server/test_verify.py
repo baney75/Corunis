@@ -104,3 +104,73 @@ def test_quote_punctuation_is_normalized(parish):
     pid = pid_with(parish, "vigil Mass is at 5:00 pm")
     curly = parish.tool_verify(f"The vigil Mass is at 5:00 pm [{pid} “The Saturday vigil Mass is at 5:00 pm”].")
     assert len(curly["kept"]) == 1, curly
+
+
+def test_a_free_text_bracket_beside_a_citation_is_dropped(parish):
+    pid = pid_with(parish, "vigil Mass is at 5:00 pm")
+    cite = f'[{pid} "The Saturday vigil Mass is at 5:00 pm"]'
+    for answer in (
+        f"The vigil Mass is at 5:00 pm {cite} [Father Doyle also says a 9:00 am Mass].",
+        f"The vigil Mass is at 5:00 pm {cite} [The alarm code is 1234].",
+        f'The vigil Mass is at 5:00 pm [{pid} "vigil Mass is at 5:00 pm"; and confessions are cancelled].',
+        f"The vigil Mass is at 5:00 pm {cite} [derived 5 and the alarm code is 1234].",
+    ):
+        result = parish.tool_verify(answer)
+        assert result["kept"] == [] and result["answer"] == NO_ANSWER, answer
+        assert "not in the form" in result["dropped"][0]["reason"]
+
+
+def test_a_derived_value_must_follow_from_its_quotes(parish):
+    roof = pid_with(parish, "Ardent Roofing bid 61,250 dollars")
+    boiler = pid_with(parish, "Sterling Mechanical")
+    vigil = pid_with(parish, "vigil Mass is at 5:00 pm")
+    both = f'[{roof} "Ardent Roofing bid 61,250 dollars"; {boiler} "Sterling Mechanical for 18,400 dollars"]'
+    made_up = parish.tool_verify(f'The roof will cost 99,999 dollars [derived 99,999] [{roof} "Ardent Roofing bid 61,250 dollars"].')
+    assert made_up["kept"] == [] and "99,999 does not follow" in made_up["dropped"][0]["reason"]
+    no_inputs = parish.tool_verify(f'Together they total 999,999 dollars [derived 999,999] [{vigil} "vigil Mass"].')
+    assert no_inputs["kept"] == [] and "no numbers in its quotes" in no_inputs["dropped"][0]["reason"]
+    worked = [
+        f"The roof bid is 42,850 dollars more than the boiler [derived 42,850] {both}.",
+        f"The roof bid is about 3.3 times the boiler [derived 3.3] {both}.",
+        f"The council has two bids in hand [derived 2] {both}.",
+    ]
+    for answer in worked:
+        assert len(parish.tool_verify(answer)["kept"]) == 1, answer
+    leave = pid_with(parish, "November 3 to December 12")
+    days = parish.tool_verify(f'The leave runs 40 days [derived 40] [{leave} "November 3 to December 12"].')
+    assert len(days["kept"]) == 1, days
+
+
+def test_numbers_are_whole_tokens_with_their_unit_and_am_or_pm(parish):
+    vigil = pid_with(parish, "vigil Mass is at 5:00 pm")
+    roof = pid_with(parish, "Ardent Roofing bid 61,250 dollars")
+    swapped = parish.tool_verify(f'The Saturday vigil Mass is at 5:00 am [{vigil} "The Saturday vigil Mass is at 5:00 pm"].')
+    assert swapped["kept"] == [] and "5:00 am" in swapped["dropped"][0]["reason"]
+    days = parish.tool_verify(f'Ardent Roofing bid 61,250 days [{roof} "Ardent Roofing bid 61,250 dollars"].')
+    assert days["kept"] == [] and "61,250 days" in days["dropped"][0]["reason"]
+    for answer in (
+        f'The Saturday vigil Mass is at 5 pm [{vigil} "The Saturday vigil Mass is at 5:00 pm"].',
+        f'The Saturday vigil Mass is at 5:00 p.m. [{vigil} "The Saturday vigil Mass is at 5:00 pm"].',
+        f'Ardent Roofing bid $61,250 [{roof} "Ardent Roofing bid 61,250 dollars"].',
+    ):
+        assert len(parish.tool_verify(answer)["kept"]) == 1, answer
+
+
+def test_a_quote_cut_from_inside_a_number_is_not_in_the_passage(parish):
+    roof = pid_with(parish, "Ardent Roofing bid 61,250 dollars")
+    result = parish.tool_verify(f'The roof bid is 1,250 dollars [{roof} "1,250 dollars to replace the church roof"].')
+    assert result["kept"] == [] and "is not in passage" in result["dropped"][0]["reason"]
+    word = parish.tool_verify(f'Roofing bid is 61,250 dollars [{roof} "rdent Roofing bid 61,250 dollars"].')
+    assert word["kept"] == [] and "is not in passage" in word["dropped"][0]["reason"]
+
+
+def test_spelled_out_numbers_are_checked_too(parish):
+    pid = pid_with(parish, "renewed every two years")
+    wrong = parish.tool_verify(f'Safe environment training is renewed every three years [{pid} "Safe environment training must be renewed every two years"].')
+    assert wrong["kept"] == [] and "three years" in wrong["dropped"][0]["reason"]
+    for answer in (
+        f'Safe environment training is renewed every two years [{pid} "Safe environment training must be renewed every two years"].',
+        f'Safe environment training is renewed every 2 years [{pid} "Safe environment training must be renewed every two years"].',
+        f'No one may skip it: training is renewed every two years [{pid} "Safe environment training must be renewed every two years"].',
+    ):
+        assert len(parish.tool_verify(answer)["kept"]) == 1, answer
