@@ -209,7 +209,7 @@ class Session:
         self.home = (home or default_home()).expanduser()
         self.brain: Brain | None = None
         self.index: Index | None = None
-        self.member: str | None = None  # set per call from identity.calling_session
+        self.member: str | None = None  # the session's caller, set per call from identity.calling_session
         start = brain_path or self._remembered()
         if start is not None:
             try:
@@ -478,7 +478,7 @@ class Session:
 
     def tool_brain_new(self, name: str, path: str | None = None) -> dict:
         root = Path(path).expanduser() if path else self.home / brainlib.folder_name(name)
-        brainlib.create(root, str(name).strip())
+        brainlib.create(root, str(name).strip(), self.member or "")
         self._open(root)
         self._remember_current()
         return {

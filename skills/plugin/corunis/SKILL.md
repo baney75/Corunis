@@ -44,8 +44,10 @@ folder on this computer and answers only from them. Its tools come from the `cor
 
 ## What v0 does not do yet
 
-- Corunis v0 answers only the keeper, in a session on the brain's own computer. Every tool
-  refuses any other caller, and refuses everyone while Local Studio Remote is serving. Members
-  wait for a signed caller identity from the core.
-- Corunis does not yet block cloud sessions. Use it only with a local model: in a session on a
-  cloud model, the question and the passages reach that provider.
+- Corunis v0 answers only the keeper, in a session on the brain's own computer: the caller
+  Local Studio names for the thread that made the brain. Every tool refuses a session from a
+  paired device, any other caller, and a session with no caller. Members wait for member
+  sessions limited to Corunis's own tools.
+- Corunis runs only with a local model. Local Studio refuses its commands on a cloud model and
+  starts its server only for the local thread that asked, so questions and passages stay on
+  the computer.

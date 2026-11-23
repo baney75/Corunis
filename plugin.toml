@@ -3,6 +3,7 @@ version = "0.1.0"
 description = "Corunis for Local Studio: a brain for your group's documents that answers only from them, with a quote for every claim, and keeps each space to the roles that may read it"
 skills = "skills/plugin"
 capabilities = ["mcp-server"]
+local_only = true
 
 [[commands]]
 name = "brain"

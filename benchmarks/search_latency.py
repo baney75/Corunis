@@ -26,11 +26,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 
-from corunis_mcp import identity  # noqa: E402
 from corunis_mcp.tools import Session  # noqa: E402
+
+KEEPER_CALLER = "local:benchmark"
 
 BRAIN_TOML = """name = "Speed Test"
 keeper = "keeper"
+keeper_caller = "local:benchmark"
 
 [roles.member]
 spaces = ["everyone"]
@@ -131,7 +133,7 @@ def main() -> int:
     if load_before[0] >= args.max_load:
         print(f"skip: 1-minute load {load_before[0]:.2f} is not under {args.max_load}", file=sys.stderr)
         return 3
-    identity.remote_serving = lambda: False  # a benchmark of search, not of the Remote check
+    os.environ["LOCAL_STUDIO_CALLER"] = KEEPER_CALLER  # the keeper's host session, as Local Studio names it
     with tempfile.TemporaryDirectory(dir=args.work) as tmp:
         root = Path(tmp) / "Speed Test"
         files, samples = build(root, args.passages, args.per_file, args.seed)
