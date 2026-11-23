@@ -17,7 +17,7 @@ from pathlib import Path
 
 from corunis_mcp import brain as brainlib
 from corunis_mcp.brain import Brain
-from corunis_mcp.extract import Unsupported, extract
+from corunis_mcp.extract import Unsupported, check, extract
 from corunis_mcp.index import Index
 from corunis_mcp.passages import split
 
@@ -142,6 +142,15 @@ def walk(brain: Brain) -> tuple[dict[str, Found], list[dict]]:
     return found, skipped
 
 
+def digest(path: Path) -> str:
+    """A file's version: the start of its SHA-256, read in chunks."""
+    sha = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            sha.update(chunk)
+    return sha.hexdigest()[:16]
+
+
 def sync(brain: Brain, index: Index) -> Report | None:
     """Re-ingest when any file was added, moved, linked, changed or removed, or a role changed placement."""
     found, skipped = walk(brain)
@@ -163,14 +172,28 @@ def ingest(brain: Brain, index: Index, scope: str = "", found: tuple | None = No
             report.unchanged += 1
             continue
         known = index.doc(rel)
-        raw = f.file.read_bytes()
-        version = hashlib.sha256(raw).hexdigest()[:16]
         paths, spaces = json.dumps(f.paths), json.dumps(f.spaces)
+        modified = datetime.fromtimestamp(f.mtime_ns / 1e9, tz=timezone.utc).date().isoformat()
+        try:
+            check(f.file, f.size)  # by name and size only, so a huge or unsupported file is never opened
+        except Unsupported as reason:
+            index.put(rel, f.space, "", f.mtime_ns, f.size, modified, [], str(reason), paths, spaces)
+            report.skipped.append({"file": rel, "reason": str(reason)})
+            continue
+        try:
+            version = digest(f.file)
+        except FileNotFoundError:
+            continue  # gone since the walk; the next sync removes it
+        except OSError as error:
+            message = f"could not read it ({type(error).__name__}: {error})"
+            # Recorded with mtime 0 so the next call tries again: fixing permissions leaves the mtime alone.
+            index.put(rel, f.space, "", 0, f.size, modified, [], message, paths, spaces)
+            report.failed.append({"file": rel, "reason": message})
+            continue
         if known is not None and known[3] == version and known_all[rel][2:] == f.key()[2:]:
             index.touch(rel, f.mtime_ns, f.size)
             report.unchanged += 1
             continue
-        modified = datetime.fromtimestamp(f.mtime_ns / 1e9, tz=timezone.utc).date().isoformat()
         try:
             units = extract(f.file)
         except Unsupported as reason:

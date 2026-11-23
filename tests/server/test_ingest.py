@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import builtins
+import io
 import os
 import re
 
@@ -81,6 +83,65 @@ def test_unsupported_and_broken_files_are_reported_not_fatal(parish):
     assert any(s["file"] == "spaces/everyone/photo.jpg" for s in report["skipped"])
     assert [f["file"] for f in report["failed"]] == ["spaces/everyone/broken.docx"]
     assert report["unchanged"] == len(FILES)
+
+
+def spy_open(monkeypatch, refuse: dict | None = None) -> list[str]:
+    """Record every file Python opens; raise the given error for a file whose name is in `refuse`."""
+    opened: list[str] = []
+    real = io.open
+
+    def spy(file, *args, **kwargs):
+        if not isinstance(file, int):
+            opened.append(os.fspath(file))
+            for name, error in (refuse or {}).items():
+                if os.fspath(file).endswith(name):
+                    raise error
+        return real(file, *args, **kwargs)
+
+    monkeypatch.setattr(io, "open", spy)
+    monkeypatch.setattr(builtins, "open", spy)
+    return opened
+
+
+def test_unsupported_and_oversized_files_are_never_opened(parish, monkeypatch):
+    root = parish.brain.root
+    (root / "spaces/everyone/video.mp4").write_bytes(b"\0" * 4096)
+    (root / "spaces/everyone/huge.txt").write_bytes(b"word " * 1000)
+    monkeypatch.setattr(extract, "MAX_FILE", 1000)
+    opened = spy_open(monkeypatch)
+    report = parish.tool_ingest()
+    assert not [path for path in opened if path.endswith(("video.mp4", "huge.txt"))], opened
+    skipped = {s["file"]: s["reason"] for s in report["skipped"]}
+    assert "not a supported type" in skipped["spaces/everyone/video.mp4"]
+    assert "larger than" in skipped["spaces/everyone/huge.txt"]
+    unread = {u["file"] for u in parish.tool_status()["unread_files"]}
+    assert {"spaces/everyone/video.mp4", "spaces/everyone/huge.txt"} <= unread
+
+
+def test_unreadable_or_vanished_file_is_reported_and_tools_still_work(parish, monkeypatch):
+    root = parish.brain.root
+    (root / "spaces/everyone/locked.txt").write_text("The alarm code is 1234.", encoding="utf-8")
+    (root / "spaces/everyone/gone.txt").write_text("Here a moment ago.", encoding="utf-8")
+    spy_open(monkeypatch, {"locked.txt": PermissionError(13, "Permission denied"), "gone.txt": FileNotFoundError(2, "No such file")})
+    found = parish.tool_search("When is the vigil Mass")
+    assert found["answerable"] and found["passages"]
+    unread = {u["file"]: u["reason"] for u in parish.tool_status()["unread_files"]}
+    assert "PermissionError" in unread["spaces/everyone/locked.txt"] and "spaces/everyone/gone.txt" not in unread
+    monkeypatch.undo()
+    parish.tool_search("When is the vigil Mass")  # readable again, same mtime: the next call reads it
+    assert doc_error(parish, "spaces/everyone/locked.txt") is None
+
+
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), reason="mode 000 blocks reads only for a non-root POSIX user")
+def test_mode_000_file_does_not_stop_search(parish):
+    locked = parish.brain.root / "spaces/everyone/locked.txt"
+    locked.write_text("The alarm code is 1234.", encoding="utf-8")
+    locked.chmod(0)
+    try:
+        assert parish.tool_search("When is the vigil Mass")["answerable"]
+        assert "PermissionError" in doc_error(parish, "spaces/everyone/locked.txt")
+    finally:
+        locked.chmod(0o644)
 
 
 def test_reingest_reads_only_what_changed(parish):

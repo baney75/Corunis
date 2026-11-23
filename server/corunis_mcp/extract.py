@@ -20,7 +20,7 @@ try:  # Optional extra: PDF text.
 except ImportError:  # pragma: no cover - depends on the host
     pypdf = None
 
-MAX_FILE = 100 * 1024 * 1024
+MAX_FILE = 50 * 1024 * 1024
 MAX_XML = 64 * 1024 * 1024
 
 TEXT = {".txt", ".text", ".md", ".markdown"}
@@ -45,12 +45,18 @@ def pdf_available() -> bool:
     return pypdf is not None
 
 
-def extract(path: Path) -> list[Unit]:
+def check(path: Path, size: int) -> None:
+    """Raise Unsupported for a type this version does not read or a file over the size cap, before it is opened."""
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED:
         raise Unsupported(f"{suffix or 'files without an extension'} is not a supported type")
-    if path.stat().st_size > MAX_FILE:
-        raise Unsupported("larger than 100 MB")
+    if size > MAX_FILE:
+        raise Unsupported(f"larger than {MAX_FILE // (1024 * 1024)} MB")
+
+
+def extract(path: Path) -> list[Unit]:
+    check(path, path.stat().st_size)
+    suffix = path.suffix.lower()
     if suffix in TEXT:
         return [Unit(decode(path.read_bytes()))]
     if suffix in HTML:
