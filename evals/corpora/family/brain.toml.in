@@ -1,0 +1,28 @@
+name = "Merriwether Family"
+keeper = "keeper"
+keeper_caller = "{{KEEPER_CALLER}}"
+
+[roles.kid]
+spaces = ["everyone"]
+
+[roles.grandparent]
+spaces = ["everyone", "household"]
+
+[roles.parent]
+spaces = ["everyone", "household", "private"]
+
+[members.keeper]
+name = "Dana Merriwether"
+roles = []
+
+[members.owen]
+name = "Owen Merriwether"
+roles = ["parent"]
+
+[members.ruth]
+name = "Ruth Merriwether"
+roles = ["grandparent"]
+
+[members.tess]
+name = "Tess Merriwether"
+roles = ["kid"]

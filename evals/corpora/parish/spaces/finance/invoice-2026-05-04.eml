@@ -1,0 +1,15 @@
+From: Kessler Plumbing <billing@kessler.example>
+To: Bookkeeper <books@stcolumba.example>
+Date: Mon, 4 May 2026 09:00:00 -0500
+Subject: Invoice 4434
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Invoice 4434 for St. Columba Parish
+
+Description: Repair of the hall kitchen sink drain
+Amount due: $365.00
+Terms: net 30
+
+Thank you for your business.
+Kessler Plumbing
