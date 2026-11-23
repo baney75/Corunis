@@ -97,3 +97,29 @@ def test_passage_dates_follow_the_file_names(pristine, group):
     for path, modified in rows:
         year, month, day = brains.date_of(path.rsplit("/", 1)[1], default)
         assert modified.startswith(f"{year:04d}-{month:02d}-{day:02d}"), (path, modified)
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_every_stale_answer_is_newer_than_what_it_replaced(pristine, group):
+    brain = pristine(group)
+    modified = dict(brain.session.index.db.execute("SELECT path, modified FROM docs"))
+    stale = [q for q in brain.questions if q["kind"] == "stale"]
+    assert stale
+    for q in stale:
+        for gold in q["gold"]:
+            for old in q["acceptable"]:
+                assert modified[gold["file"]] > modified[old["file"]], (q["id"], gold["file"], old["file"])
+
+
+def test_a_name_with_only_a_year_dates_to_that_year():
+    assert brains.date_of("sitter-pay-2025.txt", "2026-03-01") == (2025, 1, 1)
+    assert brains.date_of("sitter-rate-2026-01-15.eml", "2026-03-01") == (2026, 1, 15)
+    assert brains.date_of("biscuit-care.md", "2026-03-01") == (2026, 3, 1)
+    assert brains.date_of("service-menu-2026.html", "2026-04-01") == (2026, 4, 1)
+
+
+def test_a_leak_string_ending_in_a_number_matches_that_number_only():
+    assert leaks.find(["$18"], "The fee is $180.") == []
+    assert leaks.find(["$18"], "It came to $18,500 in all.") == []
+    assert leaks.find(["$18"], "The fee is $18.") == ["$18"]
+    assert leaks.find(["Ezra Malloy"], "ezra malloyson") == ["Ezra Malloy"]  # names still match as before

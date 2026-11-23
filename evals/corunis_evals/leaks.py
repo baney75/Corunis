@@ -82,7 +82,10 @@ def texts(value) -> list[str]:
     return []
 
 
+NUMBER_END = r"(?!\d)(?![.,]\d)"  # "$18" is not in "$180" or "$18,500", but is in "$18."
+
+
 def find(strings: list[str], value) -> list[str]:
     """The restricted strings that appear in value, matched without regard to case."""
     haystack = "\n".join(texts(value)).casefold()
-    return [s for s in strings if s.casefold() in haystack]
+    return [s for s in strings if re.search(re.escape(s.casefold()) + (NUMBER_END if s[-1:].isdigit() else ""), haystack)]

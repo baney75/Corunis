@@ -25,7 +25,9 @@ class Scripted(BaseHTTPRequestHandler):
     """Searches once, then answers from the top passage or abstains. A request with no tools is the judge."""
 
     def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.answer(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
+
+    def answer(self, body):
         last = body["messages"][-1]
         if not body.get("tools"):
             message = {"role": "assistant", "content": '{"correct": true, "reason": "matches"}'}
@@ -197,3 +199,60 @@ def test_the_judge_prompt_lets_the_kind_rule_govern():
     prompt = judges.prompt_for(answered("c", "conflicting", "The minutes say 85 and the quote says 90."))
     assert "gold passages\ncontradict" not in prompt and "the gold passages contradict" not in prompt
     assert "rule for this kind of question comes first" in prompt
+
+
+class FailsAfterSearch(Scripted):
+    """Searches, then the model endpoint breaks before an answer."""
+
+    def answer(self, body):
+        if body["messages"][-1]["role"] != "tool":
+            return super().answer(body)
+        self.send_response(500)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
+def run_py(endpoint, out, tmp_path, *extra, check=True):
+    return subprocess.run([sys.executable, str(REPO / "evals" / "run.py"), "--group", "class", "--base-url", endpoint,
+                           "--model", "scripted", "--card", "M", "--out", str(out), "--work", str(tmp_path / "work"),
+                           *extra], check=check, capture_output=True, text=True, timeout=300)
+
+
+def test_a_question_that_fails_after_a_search_keeps_what_the_server_returned(tmp_path):
+    pytest.importorskip("pypdf")
+    server = ThreadingHTTPServer(("127.0.0.1", 0), FailsAfterSearch)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = tmp_path / "run.jsonl"
+        run_py(f"http://127.0.0.1:{server.server_address[1]}/v1", out, tmp_path, "--ids", "class-single-01")
+    finally:
+        server.shutdown()
+        server.server_close()
+    record = json.loads(out.read_text(encoding="utf-8"))
+    assert record["error"] and record["answer"] == ""
+    assert record["tool_calls"] and record["tool_calls"][0]["name"] == "search", record["tool_calls"]
+
+
+def test_resume_refuses_other_settings_and_retries_failed_questions(endpoint, tmp_path):
+    pytest.importorskip("pypdf")
+    out = tmp_path / "run.jsonl"
+    run = {"group": "class", "model": "other", "base_url": endpoint, "card": "M", "temperature": 0.0, "max_turns": 8}
+    out.write_text(json.dumps({"id": "class-single-01", "run": run, "error": None}) + "\n", encoding="utf-8")
+    refused = run_py(endpoint, out, tmp_path, "--resume", "--ids", "class-single-01", check=False)
+    assert refused.returncode != 0 and "other settings" in refused.stderr, refused.stderr
+
+    out.write_text(json.dumps({"id": "class-single-01", "run": {**run, "model": "scripted"}, "error": "Timeout"}) + "\n",
+                   encoding="utf-8")
+    run_py(endpoint, out, tmp_path, "--resume", "--ids", "class-single-01")
+    records = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+    assert [(r["id"], r["error"]) for r in records] == [("class-single-01", None)]
+
+
+def test_score_refuses_records_from_two_runs(tmp_path):
+    a = answered("a", "single", "The fee is 85 dollars.")
+    b = {**answered("b", "single", "The fee is 85 dollars."), "run": {"group": "class", "model": "m", "card": "L"}}
+    run = tmp_path / "r.jsonl"
+    run.write_text(json.dumps(a) + "\n" + json.dumps(b) + "\n", encoding="utf-8")
+    done = subprocess.run([sys.executable, str(REPO / "evals" / "score.py"), str(run)],
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode != 0 and "more than one run configuration" in done.stderr, done.stderr

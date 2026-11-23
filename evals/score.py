@@ -221,6 +221,10 @@ def main() -> int:
     args = parser.parse_args()
 
     records = load(args.runs)
+    configs = {json.dumps({k: r["run"].get(k) for k in ("group", "model", "base_url", "card", "temperature", "max_turns")},
+                          sort_keys=True) for r in records}
+    if len(configs) > 1:
+        parser.error("these records come from more than one run configuration; score each on its own:\n" + "\n".join(sorted(configs)))
     verdicts = pool = None
     if args.judge != "none":
         if args.judge == "claude":

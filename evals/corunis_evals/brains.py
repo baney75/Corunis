@@ -36,6 +36,7 @@ GROUPS = ("family", "parish", "business", "class")
 PLACEHOLDER = "{{KEEPER_CALLER}}"
 SOURCES = {".docx.src": ".docx", ".pdf.src": ".pdf"}
 DATE_IN_NAME = re.compile(r"(20\d\d)-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?!\d)")
+YEAR_IN_NAME = re.compile(r"(?<!\d)(20\d\d)(?!\d)")
 PAGE_BREAK = "\f"
 PDF_WIDTH = 90
 
@@ -84,6 +85,9 @@ def date_of(name: str, default: str) -> tuple[int, int, int]:
     if match:
         return int(match[1]), int(match[2]), int(match[3] or 1)
     year, month, day = (int(part) for part in default.split("-"))
+    match = YEAR_IN_NAME.search(name)
+    if match and int(match[1]) != year:  # sitter-pay-2025.txt dates to 2025's start; a name with this year keeps the default
+        return int(match[1]), 1, 1
     return year, month, day
 
 

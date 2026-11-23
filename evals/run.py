@@ -92,6 +92,8 @@ def chat(args, messages: list[dict], tools: list[dict]) -> dict:
     return reply
 
 
+RUN_KEYS = ("group", "model", "base_url", "card", "temperature", "max_turns")  # a resumed run must match these
+
 def run_tool(client: Client, name: str, raw: str, as_role: str | None) -> dict:
     try:
         arguments = json.loads(raw or "{}")
@@ -113,9 +115,10 @@ def run_tool(client: Client, name: str, raw: str, as_role: str | None) -> dict:
             "seconds": round(time.perf_counter() - started, 3)}
 
 
-def ask(args, home: Path, brain: Path, q: dict) -> dict:
-    out: dict = {"answer": "", "tool_calls": [], "turns": 0, "model_seconds": 0.0, "tool_seconds": 0.0,
-                 "usage": {"prompt_tokens": 0, "completion_tokens": 0}, "stopped": None, "error": None}
+def ask(args, home: Path, brain: Path, q: dict, out: dict) -> dict:
+    """Fill `out` as the question goes, so a failure part way still records what the server returned."""
+    out.update({"answer": "", "tool_calls": [], "turns": 0, "model_seconds": 0.0, "tool_seconds": 0.0,
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0}, "stopped": None, "error": None})
     started = time.perf_counter()
     with Client(home, brain, KEEPER_CALLER) as client:
         tools = tool_specs(client)
@@ -186,7 +189,15 @@ def main() -> int:
         items = items[: args.limit]
     done = set()
     if args.resume and args.out.exists():
-        done = {json.loads(line)["id"] for line in args.out.read_text(encoding="utf-8").splitlines() if line.strip()}
+        kept = [json.loads(line) for line in args.out.read_text(encoding="utf-8").splitlines() if line.strip()]
+        for old in kept:
+            same = {k: old["run"].get(k) for k in RUN_KEYS} == {k: getattr(args, k) for k in RUN_KEYS}
+            if not same:
+                raise SystemExit(f"{args.out} holds a run with other settings ({ {k: old['run'].get(k) for k in RUN_KEYS} }); "
+                                 "resume it with those settings or write a new --out")
+        kept = [r for r in kept if not r.get("error")]  # a question that failed is asked again
+        args.out.write_text("".join(json.dumps(r) + "\n" for r in kept), encoding="utf-8")
+        done = {r["id"] for r in kept}
     items = [q for q in items if q["id"] not in done]
 
     work = args.work or Path(tempfile.mkdtemp(prefix=f"corunis-evals-{args.group}-"))
@@ -211,13 +222,15 @@ def main() -> int:
                       "gold_answer": q["gold_answer"], "gold": resolved(resolver, q["gold"]),
                       "acceptable": resolved(resolver, q["acceptable"]),
                       "restricted": resolved(resolver, q["restricted"]), "run": run}
+            partial: dict = {}
             try:
-                record.update(ask(args, home, brain, q))
+                record.update(ask(args, home, brain, q, partial))
             except Stop as stop:
                 print(f"STOPPED: the endpoint reported a quota, limit or billing problem: {stop}", file=sys.stderr)
                 return 3
             except Exception as error:  # one broken question must not end the run
-                record.update({"answer": "", "cited": [], "tool_calls": [], "error": f"{type(error).__name__}: {error}"})
+                record.update({**partial, "answer": "", "cited": [], "error": f"{type(error).__name__}: {error}"})
+                record.setdefault("tool_calls", [])
             sink.write(json.dumps(record) + "\n")
             sink.flush()
             print(f"[{n}/{len(items)}] {q['id']} {record.get('seconds', 0)} s "
